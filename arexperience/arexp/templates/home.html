@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Upload Image & Video</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f8f9fa; }
+    .upload-box {
+      max-width: 560px; margin: 80px auto; padding: 30px;
+      border-radius: 12px; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,.08);
+    }
+    .dropzone {
+      border: 2px dashed #ced4da; border-radius: 10px; padding: 16px; text-align: center;
+      transition: background .2s ease;
+    }
+    .dropzone.dragover { background: #f1f3f5; }
+    .preview img, .preview video { width: 100%; max-height: 240px; object-fit: cover; border-radius: 8px; }
+  </style>
+</head>
+<body>
+
+{% include "navbar.html" %}
+
+<div class="upload-box">
+  <h3 class="text-center mb-4">Upload Image & Video</h3>
+
+  {# Django messages (optional) #}
+  {% if messages %}
+    {% for m in messages %}
+      <div class="alert alert-{{ m.tags|default:'info' }} mb-3">{{ m }}</div>
+    {% endfor %}
+  {% endif %}
+
+  {% if error %}
+    <div class="alert alert-danger mb-3">{{ error }}</div>
+  {% endif %}
+
+  <form id="uploadForm" method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+
+    <!-- Image Upload -->
+    <div class="mb-3">
+      <label for="image" class="form-label">Select an Image</label>
+      <div id="imgDrop" class="dropzone mb-2">
+        <div class="small text-muted">Drag & drop or click to choose an image</div>
+        <input type="file" class="form-control mt-2" id="image" name="image" accept="image/*" required>
+      </div>
+      <div id="imgPreview" class="preview"></div>
+    </div>
+
+    <!-- Video Upload -->
+    <div class="mb-3">
+      <label for="video" class="form-label">Select a Video</label>
+      <div id="vidDrop" class="dropzone mb-2">
+        <div class="small text-muted">Drag & drop or click to choose a video</div>
+        <input type="file" class="form-control mt-2" id="video" name="video" accept="video/*" required>
+      </div>
+      <div id="vidPreview" class="preview"></div>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100">Upload</button>
+  </form>
+
+  <hr class="my-4">
+  <h5 class="mb-3">Recent uploads</h5>
+  <div class="row g-3">
+    {% for u in uploads %}
+      <div class="col-md-6">
+        <div class="p-3 border rounded">
+          {% if u.image %}
+            <img src="{{ u.image.url }}" alt="Image" class="img-fluid mb-2" style="max-height:180px;object-fit:cover;">
+          {% endif %}
+          {% if u.video %}
+            <video src="{{ u.video.url }}" controls playsinline controlsList="nodownload noplaybackrate"
+                   style="width:100%;max-height:240px;"></video>
+          {% endif %}
+          <div class="small text-muted mt-2">{{ u.uploaded_at }}</div>
+        </div>
+      </div>
+    {% empty %}
+      <p class="text-muted">No uploads yet.</p>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+  // Simple client-side checks & previews
+  const imgInput = document.getElementById('image');
+  const vidInput = document.getElementById('video');
+  const imgPrev  = document.getElementById('imgPreview');
+  const vidPrev  = document.getElementById('vidPreview');
+
+  const MAX_IMG = 10 * 1024 * 1024;   // 10MB
+  const MAX_VID = 200 * 1024 * 1024;  // 200MB
+
+  imgInput.addEventListener('change', () => {
+    imgPrev.innerHTML = '';
+    const f = imgInput.files[0];
+    if (!f) return;
+    if (!f.type.startsWith('image/')) { alert('Please select a valid image.'); imgInput.value=''; return; }
+    if (f.size > MAX_IMG) { alert('Image too large (max 10MB).'); imgInput.value=''; return; }
+    const url = URL.createObjectURL(f);
+    imgPrev.innerHTML = `<img src="${url}" alt="preview">`;
+  });
+
+  vidInput.addEventListener('change', () => {
+    vidPrev.innerHTML = '';
+    const f = vidInput.files[0];
+    if (!f) return;
+    if (!f.type.startsWith('video/')) { alert('Please select a valid video.'); vidInput.value=''; return; }
+    if (f.size > MAX_VID) { alert('Video too large (max 200MB).'); vidInput.value=''; return; }
+    const url = URL.createObjectURL(f);
+    vidPrev.innerHTML = `<video src="${url}" controls playsinline></video>`;
+  });
+
+  // Optional: drag & drop highlight
+  const dz = (el, input) => {
+    el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dragover'); });
+    el.addEventListener('dragleave', () => el.classList.remove('dragover'));
+    el.addEventListener('drop', e => {
+      e.preventDefault(); el.classList.remove('dragover');
+      if (e.dataTransfer.files?.length) { input.files = e.dataTransfer.files; input.dispatchEvent(new Event('change')); }
+    });
+    el.addEventListener('click', () => input.click());
+  };
+  dz(document.getElementById('imgDrop'), imgInput);
+  dz(document.getElementById('vidDrop'), vidInput);
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
