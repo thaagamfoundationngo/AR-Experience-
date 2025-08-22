@@ -1,0 +1,101 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>AR Experience</title>
+
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <!-- AR.js with NFT (marker-based image tracking) -->
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar-nft.js"></script>
+
+  <style>
+    html, body { margin:0; height:100%; background:#000; }
+    #msg { position:fixed; left:0; right:0; top:0; z-index:9999; background:#111; color:#0f0;
+           font:12px/1.4 monospace; padding:6px 8px; max-height:40vh; overflow:auto; }
+    #unmute { position:fixed; right:16px; bottom:16px; z-index:10; display:none;
+              padding:10px 14px; border:0; border-radius:12px; background:rgba(0,0,0,.55); color:#fff; font:600 14px system-ui; }
+  </style>
+</head>
+<body>
+<div id="msg">Loading…</div>
+<button id="unmute">Tap for Sound 🔊</button>
+
+<!-- Video asset (this video will play on marker detection) -->
+<video id="overlayVid" src="{{ video_url }}"
+       preload="auto" loop playsinline webkit-playsinline muted crossorigin="anonymous"></video>
+
+<a-scene
+  vr-mode-ui="enabled:false"
+  embedded
+  renderer="alpha:true;antialias:true;colorManagement:true;logarithmicDepthBuffer:true"
+  device-orientation-permission-ui="enabled:true"
+  arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;">
+
+  <!-- NFT Marker (Image Target) -->
+  <a-nft
+    type="nft"
+    url="{{ marker_base_url }}"  <!-- Uses the marker base URL (static path) -->
+    smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5">
+    <!-- Display video on marker -->
+    <a-video src="#overlayVid" width="1.0" height="0.5625" position="0 0 0" rotation="-90 0 0"></a-video>
+  </a-nft>
+
+  <a-entity camera></a-entity>
+</a-scene>
+
+<script>
+  const logEl = document.getElementById('msg');
+  const v = document.getElementById('overlayVid');
+  const unmute = document.getElementById('unmute');
+
+  // Function to log errors to the debug box
+  function log(s){ 
+    logEl.textContent = (s + "\n" + logEl.textContent).slice(0,8000); 
+  }
+
+  window.addEventListener('error', e => log('JS ERROR: '+e.message));
+  window.addEventListener('unhandledrejection', e => log('PROMISE REJ: '+(e.reason && e.reason.message || e.reason)));
+
+  // Log camera permission state
+  navigator.permissions && navigator.permissions.query({name:'camera'}).then(p => log('Camera perm: '+p.state)).catch(()=>{});
+
+  // When the marker is found, try playing the video (muted by default)
+  document.addEventListener('markerFound', () => {
+    log('markerFound');
+    v.muted = true;
+    v.play().catch(err => log('video play err: '+err));
+    unmute.style.display = 'block';
+  });
+
+  // Unmute when the user clicks the button
+  unmute.addEventListener('click', async () => {
+    try {
+      v.muted = false;
+      await v.play();
+      unmute.style.display = 'none';
+    } catch (e) {
+      log('unmute failed: ' + e);
+    }
+  });
+
+  // Quick resource checks (to check if the marker and video files exist)
+  (async () => {
+    const base = "{{ marker_base_url }}";   // Path to the marker without the extension
+    const files = [base+'.iset', base+'.fset', base+'.fset3', "{{ video_url }}"];
+    for (const u of files) {
+      try {
+        const r = await fetch(u, { method: 'HEAD' });
+        log((r.ok ? 'OK ' : 'ERR ') + u + ' ' + r.status);
+      } catch (e) {
+        log('FETCH FAIL ' + u + ' ' + e);
+      }
+    }
+  })();
+</script>
+</body>
+</html>

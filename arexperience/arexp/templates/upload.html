@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Upload AR Experience</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f8f9fa; }
+    .upload-box { max-width: 560px; margin: 40px auto; padding: 30px; border-radius: 12px; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,.08); }
+    .dropzone { border: 2px dashed #ced4da; border-radius: 10px; padding: 16px; text-align: center; transition: background .2s ease; cursor: pointer; }
+    .dropzone.dragover { background: #f1f3f5; border-color: #007bff; }
+    .preview img { width: 100%; max-height: 240px; object-fit: cover; border-radius: 8px; }
+    .preview video { width: 100%; max-height: 240px; object-fit: cover; border-radius: 8px; }
+    .qr { width: 120px; height: 120px; object-fit: contain; background:#fff; }
+    .form-errors { color: #dc3545; font-size: 0.875rem; margin-top: 0.25rem; }
+  </style>
+</head>
+<body>
+
+<div class="upload-box">
+  <h3 class="text-center mb-4">Create AR Experience</h3>
+
+  {% if messages %}
+    {% for m in messages %}
+      <div class="alert alert-{{ m.tags|default:'info' }} mb-3">{{ m }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <form id="uploadForm" method="post" action="{% url 'upload_view' %}" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+
+    <!-- Title -->
+    <div class="mb-3">
+      <label for="{{ form.title.id_for_label }}" class="form-label">Experience Title</label>
+      {{ form.title }}
+      {% if form.title.errors %}
+        <div class="form-errors">{{ form.title.errors.0 }}</div>
+      {% endif %}
+      <div class="form-text">Give your AR experience a descriptive name.</div>
+    </div>
+
+    <!-- Description -->
+    <div class="mb-3">
+      <label for="{{ form.description.id_for_label }}" class="form-label">Description (Optional)</label>
+      {{ form.description }}
+      {% if form.description.errors %}
+        <div class="form-errors">{{ form.description.errors.0 }}</div>
+      {% endif %}
+    </div>
+
+    <!-- Image Upload (Marker) -->
+    <div class="mb-3">
+      <label for="{{ form.image.id_for_label }}" class="form-label">AR Marker Image</label>
+      <div id="imgDrop" class="dropzone mb-2">
+        <div class="small text-muted">Drag & drop or click to choose an image</div>
+        {{ form.image }}
+      </div>
+      {% if form.image.errors %}
+        <div class="form-errors">{{ form.image.errors.0 }}</div>
+      {% endif %}
+      <div id="imgPreview" class="preview mt-2"></div>
+      <div class="form-text">Upload a high-contrast image that works well as an AR marker (JPG, PNG).</div>
+    </div>
+    
+    <!-- Video Upload (AR Overlay) -->
+    <div class="mb-3">
+      <label class="form-label">
+          <strong>🎬 Video Overlay</strong>
+      </label>
+      <div id="videoDrop" class="dropzone">
+          <div class="upload-icon">🎥</div>
+          <div class="small text-muted mb-2">Drag & drop your video here or click to browse</div>
+          {{ form.video }}
+      </div>
+      {% if form.video.errors %}
+          <div class="form-errors">{{ form.video.errors.0 }}</div>
+      {% endif %}
+      <div id="videoPreview" class="preview"></div>
+      <div class="form-text mt-2">
+          <small>📋 <strong>Tips:</strong> Use MP4 format for best compatibility, keep under 200MB, shorter videos load faster</small>
+      </div>
+    </div>
+
+    <!-- QR Code Preview -->
+    {% if qr_code %}
+      <h5>Generated QR Code</h5>
+      <img src="{{ qr_code.url }}" alt="QR Code" class="qr">
+    {% endif %}
+
+    <button type="submit" class="btn btn-primary w-100">Create AR Experience</button>
+  </form>
+</div>
+
+<script>
+  const imgInput = document.getElementById('{{ form.image.id_for_label }}');
+  const imgPrev = document.getElementById('imgPreview');
+  const videoInput = document.getElementById('{{ form.video.id_for_label }}');
+  const videoPreview = document.getElementById('videoPreview');
+
+  const MAX_IMG = 10 * 1024 * 1024; // 10MB
+  const MAX_VIDEO = 200 * 1024 * 1024; // 200MB
+
+  // Image preview
+  imgInput.addEventListener('change', () => {
+    imgPrev.innerHTML = '';
+    const f = imgInput.files[0];
+    if (!f) return;
+    
+    if (!f.type.startsWith('image/')) { 
+      alert('Please select a valid image.'); 
+      imgInput.value=''; 
+      return; 
+    }
+    
+    if (f.size > MAX_IMG) { 
+      alert('Image too large (max 10MB).'); 
+      imgInput.value=''; 
+      return; 
+    }
+    
+    imgPrev.innerHTML = `<img src="${URL.createObjectURL(f)}" alt="preview">`;
+  });
+
+  // Video preview and validation
+  if (videoInput) {
+    videoInput.addEventListener('change', () => {
+      videoPreview.innerHTML = '';
+      const file = videoInput.files[0];
+      if (!file) return;
+
+      // Validate file type
+      if (!file.type.startsWith('video/')) { 
+        alert('❌ Please select a valid video file (MP4, WebM, MOV)');
+        videoInput.value = ''; 
+        return; 
+      }
+
+      // Validate file size
+      if (file.size > MAX_VIDEO) { 
+        alert('❌ Video too large! Please choose a file smaller than 200MB');
+        videoInput.value = ''; 
+        return; 
+      }
+
+      // Show preview
+      const video = document.createElement('video');
+      video.src = URL.createObjectURL(file);
+      video.controls = true;
+      video.style.width = '100%';
+      video.style.maxHeight = '200px';
+      videoPreview.appendChild(video);
+    });
+  }
+
+</script>
+
+</body>
+</html>

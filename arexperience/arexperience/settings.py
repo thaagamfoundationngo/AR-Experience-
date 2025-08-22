@@ -45,7 +45,10 @@ ROOT_URLCONF = "arexperience.urls"
 # settings.py
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
-STATIC_URL = "/static/"
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+DATA_UPLOAD_MAX_MEMORY_SIZE = 524288000  # 500MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 524288000
+BASE_URL = "https://5123edc235ea.ngrok-free.app"
 # settings.py
 #MINDAR_CLI = r"C:\Users\pc\AppData\Roaming\npm\mindar-image.cmd"
 
@@ -66,6 +69,8 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "arexperience.wsgi.application"
+
+
 
 
 # Database
@@ -114,18 +119,21 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = "static/"
-#STATICFILES_DIRS = [os.path.join(BASE_DIR, "static"),]
+STATICFILES_DIRS = [os.path.join(BASE_DIR, "static"),]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 DEBUG = True
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", ".ngrok-free.app",]
 
 CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://localhost:8000",
+    "https://*.ngrok-free.app",
+    "http://localhost",
+    "http://127.0.0.1",
 ]
-
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # Ensure cookies can be set on HTTP during dev
 CSRF_COOKIE_SECURE = False
 SESSION_COOKIE_SECURE = False
