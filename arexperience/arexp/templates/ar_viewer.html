@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Video Overlay Experience</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.0/aframe.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ar.js/2.2.2/aframe-ar.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #000;
+        }
+        
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            z-index: 1000;
+        }
+        
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 10px;
+        }
+        
+        .control-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        .control-btn:hover {
+            background: #0056b3;
+        }
+        
+        .control-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        #instructions {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 300px;
+            font-size: 14px;
+            z-index: 100;
+        }
+        
+        .marker-info {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 12px;
+            z-index: 100;
+        }
+        
+        #markerFound {
+            display: none;
+            color: #00ff00;
+        }
+        
+        #markerLost {
+            color: #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <h3>🎯 Loading AR Experience...</h3>
+        <p>Please allow camera access</p>
+    </div>
+    
+    <div id="instructions">
+        <h4>📱 Instructions:</h4>
+        <p>• Point camera at the marker below</p>
+        <p>• Video will overlay on marker when detected</p>
+        <p>• Use controls to play/pause video</p>
+        <p>• Keep marker in view for best experience</p>
+    </div>
+    
+    <div class="marker-info">
+        <div id="markerLost">❌ Marker not detected</div>
+        <div id="markerFound">✅ Marker detected - Video playing!</div>
+    </div>
+    
+    <div class="controls">
+        <button class="control-btn" id="playBtn" onclick="playVideo()">▶️ Play</button>
+        <button class="control-btn" id="pauseBtn" onclick="pauseVideo()">⏸️ Pause</button>
+        <button class="control-btn" id="muteBtn" onclick="toggleMute()">🔊 Mute</button>
+        <button class="control-btn" id="resetBtn" onclick="resetVideo()">🔄 Reset</button>
+    </div>
+
+    <a-scene
+        embedded
+        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+        vr-mode-ui="enabled: false"
+        renderer="logarithmicDepthBuffer: true; precision: medium;"
+        background="color: #000000; transparent: true"
+        loading-screen="enabled: false">
+        
+        <!-- Define assets -->
+        <a-assets>
+            <!-- Sample video - replace with your video URL -->
+            <video id="arVideo" 
+                   autoplay 
+                   loop 
+                   muted 
+                   playsinline 
+                   webkit-playsinline
+                   crossorigin="anonymous"
+                   preload="auto">
+                <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+                <!-- Fallback for browsers that don't support MP4 -->
+                <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.webm" type="video/webm">
+            </video>
+        </a-assets>
+
+        <!-- AR Marker -->
+        <a-marker 
+            preset="hiro" 
+            id="mainMarker"
+            markerhandler
+            emitevents="true"
+            cursor="fuse: false; rayOrigin: mouse;">
+            
+            <!-- Video Plane -->
+            <a-plane 
+                id="videoPlane"
+                material="src: #arVideo; opacity: 0.9; transparent: true"
+                width="2" 
+                height="1.125" 
+                position="0 0.5 0"
+                rotation="-90 0 0"
+                animation__mouseenter="property: scale; to: 1.1 1.1 1.1; startEvents: mouseenter; dur: 300"
+                animation__mouseleave="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 300">
+            </a-plane>
+            
+            <!-- Frame around video -->
+            <a-box 
+                color="#ffffff" 
+                width="2.1" 
+                height="0.05" 
+                depth="1.225"
+                position="0 0.5 0"
+                rotation="-90 0 0"
+                opacity="0.8">
+            </a-box>
+            
+            <!-- Play button indicator -->
+            <a-cylinder 
+                id="playIndicator"
+                color="#007bff" 
+                radius="0.15" 
+                height="0.02"
+                position="0 0.51 -0.7"
+                rotation="-90 0 0"
+                opacity="0.8"
+                animation="property: rotation; to: -90 360 0; loop: true; dur: 4000">
+                <a-text 
+                    value="▶️" 
+                    position="0 0.01 0" 
+                    rotation="90 0 0"
+                    align="center"
+                    color="white"
+                    scale="0.5 0.5 0.5">
+                </a-text>
+            </a-cylinder>
+            
+            <!-- Title text -->
+            <a-text 
+                value="AR VIDEO EXPERIENCE"
+                position="0 1.2 0"
+                rotation="-90 0 0"
+                align="center"
+                color="#ffffff"
+                scale="0.3 0.3 0.3"
+                opacity="0.9">
+            </a-text>
+            
+        </a-marker>
+
+        <!-- Camera -->
+        <a-entity camera look-controls-enabled="false"></a-entity>
+    </a-scene>
+
+    <!-- Marker Pattern (Users need to print this) -->
+    <div style="position: fixed; bottom: 100px; right: 20px; background: white; padding: 10px; border-radius: 5px; z-index: 100;">
+        <p style="margin: 0 0 10px 0; color: black; font-size: 12px; text-align: center;"><strong>Print this marker:</strong></p>
+        <img src="https://ar-js-org.github.io/AR.js/data/images/hiro.png" 
+             alt="AR Marker" 
+             style="width: 100px; height: 100px; border: 1px solid #ccc;">
+    </div>
+
+    <script>
+        let video;
+        let isVideoMuted = false;
+        let isVideoPlaying = false;
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                document.getElementById('loading').style.display = 'none';
+            }, 2000);
+            
+            // Get video element
+            video = document.getElementById('arVideo');
+            
+            // Set up video event listeners
+            video.addEventListener('loadeddata', function() {
+                console.log('Video loaded and ready');
+                isVideoPlaying = video.autoplay;
+            });
+            
+            video.addEventListener('play', function() {
+                isVideoPlaying = true;
+                updatePlayButton();
+            });
+            
+            video.addEventListener('pause', function() {
+                isVideoPlaying = false;
+                updatePlayButton();
+            });
+            
+            // Handle marker events
+            const marker = document.getElementById('mainMarker');
+            
+            marker.addEventListener('markerFound', function() {
+                console.log('Marker detected!');
+                document.getElementById('markerLost').style.display = 'none';
+                document.getElementById('markerFound').style.display = 'block';
+                
+                // Ensure video plays when marker is found
+                if (video) {
+                    video.play().catch(e => {
+                        console.log('Video autoplay prevented:', e);
+                    });
+                }
+            });
+            
+            marker.addEventListener('markerLost', function() {
+                console.log('Marker lost!');
+                document.getElementById('markerFound').style.display = 'none';
+                document.getElementById('markerLost').style.display = 'block';
+            });
+        });
+        
+        // Control functions
+        function playVideo() {
+            if (video) {
+                video.play().then(() => {
+                    isVideoPlaying = true;
+                    updatePlayButton();
+                }).catch(e => {
+                    console.error('Error playing video:', e);
+                    alert('Please interact with the page first to enable video playback');
+                });
+            }
+        }
+        
+        function pauseVideo() {
+            if (video) {
+                video.pause();
+                isVideoPlaying = false;
+                updatePlayButton();
+            }
+        }
+        
+        function toggleMute() {
+            if (video) {
+                video.muted = !video.muted;
+                isVideoMuted = video.muted;
+                document.getElementById('muteBtn').innerHTML = isVideoMuted ? '🔇 Unmute' : '🔊 Mute';
+            }
+        }
+        
+        function resetVideo() {
+            if (video) {
+                video.currentTime = 0;
+                video.play().then(() => {
+                    isVideoPlaying = true;
+                    updatePlayButton();
+                }).catch(e => {
+                    console.error('Error resetting video:', e);
+                });
+            }
+        }
+        
+        function updatePlayButton() {
+            const playBtn = document.getElementById('playBtn');
+            const pauseBtn = document.getElementById('pauseBtn');
+            
+            if (isVideoPlaying) {
+                playBtn.disabled = true;
+                pauseBtn.disabled = false;
+                playBtn.style.opacity = '0.6';
+                pauseBtn.style.opacity = '1';
+            } else {
+                playBtn.disabled = false;
+                pauseBtn.disabled = true;
+                playBtn.style.opacity = '1';
+                pauseBtn.style.opacity = '0.6';
+            }
+        }
+        
+        // Handle browser compatibility
+        AFRAME.registerComponent('markerhandler', {
+            init: function () {
+                const marker = this.el;
+                
+                marker.addEventListener('markerFound', function () {
+                    // Marker found logic
+                    console.log('Custom marker handler: found');
+                });
+                
+                marker.addEventListener('markerLost', function () {
+                    // Marker lost logic
+                    console.log('Custom marker handler: lost');
+                });
+            }
+        });
+        
+        // Error handling for video loading issues
+        window.addEventListener('error', function(e) {
+            if (e.target.tagName === 'VIDEO') {
+                console.error('Video loading error:', e);
+                alert('Video failed to load. Please check your internet connection.');
+            }
+        });
+        
+        // Prevent context menu on long press (mobile)
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html>

@@ -48,7 +48,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DATA_UPLOAD_MAX_MEMORY_SIZE = 524288000  # 500MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 524288000
-BASE_URL = "https://5123edc235ea.ngrok-free.app"
+BASE_URL = "https://dbddfdf5a574.ngrok-free.app"
 # settings.py
 #MINDAR_CLI = r"C:\Users\pc\AppData\Roaming\npm\mindar-image.cmd"
 

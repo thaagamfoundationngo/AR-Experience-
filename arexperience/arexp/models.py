@@ -1,50 +1,109 @@
-# models.py
-import os
-import uuid
-from django.db import models
+# models.py - Fixed version without lambda functions
 
-from django.utils.text import slugify
-import uuid
-# app/models.py
-import uuid
 import os
+import uuid
 from django.db import models
-from django.urls import reverse
+from django.utils.text import slugify
 from django.core.validators import FileExtensionValidator
+from django.conf import settings
+
+def validate_and_truncate_filename(instance, filename):
+    """Truncate long filenames and ensure they're safe"""
+    name, ext = os.path.splitext(filename)
+    
+    # Remove or replace problematic characters
+    safe_name = "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).strip()
+    
+    # Truncate if too long (leave room for extension and unique suffix)
+    max_length = 80  # Conservative limit
+    if len(safe_name) > max_length:
+        safe_name = safe_name[:max_length]
+    
+    # Add unique suffix if name is generic or empty
+    if not safe_name or safe_name.lower() in ['undefined', 'untitled', 'image', 'video']:
+        safe_name = f"file_{uuid.uuid4().hex[:8]}"
+    
+    return f"{safe_name}{ext}"
 
 def _delete_file(path):
+    """Safely delete a file"""
     try:
         if path and os.path.exists(path):
             os.remove(path)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Could not delete file {path}: {e}")
+
+# Upload path functions - these replace the lambda functions
+def upload_image_path(instance, filename):
+    """Generate upload path for Upload model images"""
+    clean_filename = validate_and_truncate_filename(instance, filename)
+    return f"images/{clean_filename}"
+
+def upload_video_path(instance, filename):
+    """Generate upload path for Upload model videos"""
+    clean_filename = validate_and_truncate_filename(instance, filename)
+    return f"videos/{clean_filename}"
+
+def upload_mind_file_path(instance, filename):
+    """Generate upload path for Upload model mind files"""
+    clean_filename = validate_and_truncate_filename(instance, filename)
+    return f"targets/{clean_filename}"
+
+def ar_marker_image_path(instance, filename):
+    """Generate upload path for AR Experience marker images"""
+    clean_filename = validate_and_truncate_filename(instance, filename)
+    return f"markers/{clean_filename}"
+
+def ar_video_path(instance, filename):
+    """Generate upload path for AR Experience videos"""
+    clean_filename = validate_and_truncate_filename(instance, filename)
+    return f"videos/{clean_filename}"
+
+def ar_model_path(instance, filename):
+    """Generate upload path for AR Experience 3D models"""
+    clean_filename = validate_and_truncate_filename(instance, filename)
+    return f"models/{clean_filename}"
+
+def ar_qr_path(instance, filename):
+    """Generate upload path for AR Experience QR codes"""
+    clean_filename = validate_and_truncate_filename(instance, filename)
+    return f"qrcodes/{clean_filename}"
 
 class Upload(models.Model):
-    # 8th Wall Studio-la create pannina image target name (e.g., "poster_001")
-    target_name = models.CharField(max_length=100, help_text="8th Wall Image Target name", db_index=True)
+    """Upload model with proper filename handling"""
+    target_name = models.CharField(
+        max_length=100, 
+        help_text="8th Wall Image Target name", 
+        db_index=True
+    )
 
     image = models.ImageField(
-        upload_to="images/",
-        blank=False, null=False
+        upload_to=upload_image_path,
+        blank=False, 
+        null=False
     )
+    
     video = models.FileField(
-        upload_to="videos/",
+        upload_to=upload_video_path,
         validators=[FileExtensionValidator(allowed_extensions=["mp4", "mov", "webm"])],
-        blank=False, null=False
+        blank=False, 
+        null=False
     )
 
-    # OPTIONAL: any exported target data / JSON you want to keep (not required for 8th Wall)
-    mind_file = models.FileField(upload_to="targets/", blank=True, null=True)
+    mind_file = models.FileField(
+        upload_to=upload_mind_file_path, 
+        blank=True, 
+        null=True
+    )
 
-    # Shareable short code for links (use in URL instead of pk)
     slug = models.SlugField(max_length=100, unique=True, blank=True)
-
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-uploaded_at"]
 
-    # ---- Convenience ----
     def image_url(self):
         return self.image.url if self.image else ""
 
@@ -52,31 +111,28 @@ class Upload(models.Model):
         return self.video.url if self.video else ""
 
     def __str__(self):
-        # single __str__ only
         return f"Upload {self.id} | {self.target_name} | {self.slug}"
 
     def get_absolute_url(self):
+        from django.urls import reverse
         return reverse("experience_slug", args=[self.slug])
 
     def get_qr_url(self):
+        from django.urls import reverse
         return reverse("qr_slug", args=[self.slug])
 
-    # ---- Slug generation ----
     def save(self, *args, **kwargs):
-        creating = self._state.adding
         if not self.slug:
             self.slug = self.generate_unique_slug()
         super().save(*args, **kwargs)
 
     @staticmethod
     def generate_unique_slug():
-        # 8-hex short id; regenerate if collision
         while True:
             s = uuid.uuid4().hex[:8]
             if not Upload.objects.filter(slug=s).exists():
                 return s
 
-    # ---- Optional: cleanup old files on replace ----
     def delete(self, *args, **kwargs):
         img_path = self.image.path if self.image else None
         vid_path = self.video.path if self.video else None
@@ -88,47 +144,50 @@ class Upload(models.Model):
 
 
 class ARExperience(models.Model):
-    """Model for AR experiences with image markers"""
+    """AR Experience model with proper file handling"""
     
-    # Basic fields
     title = models.CharField(max_length=200, help_text="Name of the AR experience")
-    slug = models.SlugField(max_length=50, unique=True, blank=True, help_text="URL-friendly identifier")
+    slug = models.SlugField(max_length=50, unique=True, blank=True)
     description = models.TextField(blank=True, help_text="Description of the AR experience")
-    image = models.ImageField(upload_to='markers/')
-    video = models.FileField(upload_to='videos/', blank=True, null=True)  # Add video field
-    model_file = models.FileField(upload_to='models/', blank=True, null=True)
-    content_text = models.TextField(blank=True)
-    content_url = models.URLField(blank=True)
-    marker_size = models.FloatField(default=1.0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    qr_code = models.FileField(upload_to='qrcodes/', blank=True, null=True)
-    # Image for marker generation
+    
+    # Files with proper filename handling using named functions
     image = models.ImageField(
-        upload_to='markers/',
-        help_text="Image to be used as AR marker (JPG, PNG recommended)"
+        upload_to=ar_marker_image_path,
+        help_text="Image to be used as AR marker"
     )
     
-    # 3D Model or content
-    model_file = models.FileField(
-        upload_to='models/',
-        blank=True,
+    video = models.FileField(
+        upload_to=ar_video_path,
+        blank=True, 
         null=True,
-        help_text="3D model file (GLB, GLTF, OBJ)"
+        validators=[FileExtensionValidator(allowed_extensions=["mp4", "mov", "webm"])],
+        help_text="Optional video to display in AR experience"
     )
     
-    # Additional content
-    content_text = models.TextField(blank=True, help_text="Text content to display in AR")
-    content_url = models.URLField(blank=True, help_text="URL to additional content")
+    model_file = models.FileField(
+        upload_to=ar_model_path,
+        blank=True, 
+        null=True,
+        validators=[FileExtensionValidator(allowed_extensions=["glb", "gltf", "usdz"])],
+        help_text="Optional 3D model file"
+    )
     
-    # Metadata
+    content_text = models.TextField(blank=True, help_text="Optional text content to display")
+    content_url = models.URLField(blank=True, help_text="URL to additional content")
+    marker_size = models.FloatField(default=1.0, help_text="Size of the marker in AR space")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True, help_text="Whether this experience is active")
     
-    # MindAR settings
-    marker_generated = models.BooleanField(default=False, help_text="Whether marker files have been generated")
-    marker_size = models.FloatField(default=1.0, help_text="Size of the marker in AR space")
+    qr_code = models.FileField(
+        upload_to=ar_qr_path, 
+        blank=True, 
+        null=True
+    )
     
+    marker_generated = models.BooleanField(default=False, help_text="Whether marker files have been generated")
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = "AR Experience"
@@ -138,46 +197,50 @@ class ARExperience(models.Model):
         return self.title
     
     def save(self, *args, **kwargs):
-        if not self.title:
-            raise ValueError("Title is required to generate a slug")
+        # Generate slug if not set
         if not self.slug:
-            base_slug = slugify(self.title)
-            if not base_slug:
-                base_slug = f"experience-{uuid.uuid4().hex[:8]}"
-        
-            counter = 1
-            slug = base_slug
-            while ARExperience.objects.filter(slug=slug).exists():
-                slug = f"{base_slug}-{counter}"
-                counter += 1
-            self.slug = slug
-    
+            self.slug = slugify(self.name)
+            # Ensure uniqueness
+            count = 1
+            original_slug = self.slug
+            while Experience.objects.filter(slug=self.slug).exists():
+                self.slug = f"{original_slug}-{count}"
+                count += 1
         super().save(*args, **kwargs)
-
+    
     @property
     def marker_files_exist(self):
-        """Check if marker files exist for this experience"""
-        import os
-        from django.conf import settings
-        
+        """Check if marker files exist"""
         try:
-            static_dir = getattr(settings, 'STATICFILES_DIRS', ['static'])[0] if hasattr(settings, 'STATICFILES_DIRS') else 'static'
-            marker_dir = os.path.join(static_dir, 'markers', self.slug)
-            
-            required_files = [f"{self.slug}.iset", f"{self.slug}.fset", f"{self.slug}.fset3"]
-            return all(
-                os.path.exists(os.path.join(marker_dir, file)) 
-                for file in required_files
-            )
-        except:
+            from django.conf import settings
+            static_dir = (settings.STATICFILES_DIRS[0] 
+                         if getattr(settings, "STATICFILES_DIRS", None) 
+                         else os.path.join(settings.BASE_DIR, "static"))
+
+            marker_dir = os.path.join(static_dir, "markers", self.slug)
+            required = [f"{self.slug}.iset", f"{self.slug}.fset", f"{self.slug}.fset3"]
+
+            return all(os.path.exists(os.path.join(marker_dir, f)) for f in required)
+        except Exception:
             return False
     
     def get_absolute_url(self):
-        """Get the URL for this AR experience"""
         from django.urls import reverse
         return reverse('experience_view', kwargs={'slug': self.slug})
     
     def get_qr_url(self):
-        """Get the QR code URL for this experience"""
         from django.urls import reverse
         return reverse('qr_view', kwargs={'slug': self.slug})
+    
+    def delete(self, *args, **kwargs):
+        """Clean up files when deleting"""
+        img_path = self.image.path if self.image else None
+        vid_path = self.video.path if self.video else None
+        model_path = self.model_file.path if self.model_file else None
+        qr_path = self.qr_code.path if self.qr_code else None
+        
+        super().delete(*args, **kwargs)
+        
+        # Clean up files
+        for path in [img_path, vid_path, model_path, qr_path]:
+            _delete_file(path)
