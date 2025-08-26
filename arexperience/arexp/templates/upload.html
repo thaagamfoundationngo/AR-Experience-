@@ -286,27 +286,6 @@
         {% endfor %}
       {% endif %}
 
-      <!-- Success Message with AR Launch -->
-      {% if new_experience_slug %}
-        <div class="alert alert-success">
-          <div class="success-title">✅ AR Experience Created Successfully!</div>
-          <p><strong>"{{ new_experience_slug }}"</strong> is ready to launch!</p>
-          <div class="mt-3">
-            {% for exp in experiences %}
-              {% if exp.slug == new_experience_slug %}
-                <div class="btn-group">
-                  <a href="{% url 'ar_experience' exp.id %}" class="btn btn-primary">
-                    🎯 Launch AR Experience
-                  </a>
-                  <a href="{% url 'experience_view' exp.slug %}" class="btn btn-secondary">
-                    📱 View Details
-                  </a>
-                </div>
-              {% endif %}
-            {% endfor %}
-          </div>
-        </div>
-      {% endif %}
 
       <!-- Upload Form -->
       <form id="uploadForm" method="post" action="{% url 'upload_view' %}" enctype="multipart/form-data" novalidate>
@@ -399,6 +378,45 @@
       {% endif %}
     </div>
   </div>
+{% if new_experience_slug %}
+    <!-- Success message when AR experience is created -->
+    <div class="alert alert-success">
+        <div class="success-title">✅ AR Experience Created Successfully!</div>
+        <p><strong>"{{ new_experience_slug }}"</strong> is ready to launch!</p>
+        <div class="mt-3">
+            {% for exp in experiences %}
+                {% if exp.slug == new_experience_slug %}
+                    <div class="btn-group">
+                        <a href="{% url 'ar_experience' exp.id %}" class="btn btn-primary">
+                            🎯 Launch AR Experience
+                        </a>
+                        <a href="{% url 'experience_view' exp.slug %}" class="btn btn-secondary">
+                            📱 View Details
+                        </a>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}
+
+{% if not new_experience_slug %}
+    <!-- Failure message when AR experience fails to generate -->
+    <div class="alert alert-danger">
+        <div class="success-title">❌ AR Experience Generation Failed!</div>
+        <p>There was an issue generating the AR Experience. Please try again or check the provided details.</p>
+        <div class="mt-3">
+            <a href="{% url 'upload_view' %}" class="btn btn-danger">❌ Retry Upload</a>
+        </div>
+    </div>
+{% endif %}
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }}">
+            {{ message }}
+        </div>
+    {% endfor %}
+{% endif %}
 
   <!-- Recent Experiences Section -->
   {% if experiences %}

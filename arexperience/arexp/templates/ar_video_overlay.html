@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AR with Video Overlay</title>
+  <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/jeromeetienne/AR.js/aframe/build/aframe-ar.js"></script>
+</head>
+<body style="margin: 0; overflow: hidden;">
+
+  <!-- A-Frame AR scene -->
+  <a-scene embedded arjs>
+    <!-- Marker for each feature -->
+    <a-marker type="pattern" url="path_to_marker_pattern_marker_1.patt" id="marker-1">
+      <!-- Video overlay triggered by this marker -->
+      <a-video id="video-overlay-1" src="path_to_video_1.mp4" position="0 0 0" scale="2 2 2"></a-video>
+    </a-marker>
+
+    <!-- Another Marker for a different feature -->
+    <a-marker type="pattern" url="path_to_marker_pattern_marker_2.patt" id="marker-2">
+      <a-video id="video-overlay-2" src="path_to_video_2.mp4" position="0 0 0" scale="2 2 2"></a-video>
+    </a-marker>
+
+    <!-- Camera for AR -->
+    <a-camera></a-camera>
+  </a-scene>
+
+  <script>
+    // Define video overlay behavior for multiple markers
+    const markers = [
+      { id: 'marker-1', videoSrc: 'path_to_video_1.mp4' },
+      { id: 'marker-2', videoSrc: 'path_to_video_2.mp4' },
+    ];
+
+    markers.forEach(markerData => {
+      const marker = document.getElementById(markerData.id);
+      const videoElement = document.getElementById(`video-overlay-${markerData.id}`);
+
+      // Event listener when marker is detected
+      marker.addEventListener('markerFound', function() {
+        videoElement.setAttribute('src', markerData.videoSrc);  // Dynamically set the video source
+        videoElement.play();  // Play the video when marker is found
+      });
+
+      // Event listener when marker is lost
+      marker.addEventListener('markerLost', function() {
+        videoElement.pause();  // Pause video when marker is lost
+      });
+    });
+  </script>
+
+</body>
+</html>

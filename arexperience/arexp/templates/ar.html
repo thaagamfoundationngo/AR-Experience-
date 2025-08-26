@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AR Feature - Video Trigger</title>
+  <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/jeromeetienne/AR.js/aframe/build/aframe-ar.js"></script>
+</head>
+<body style="margin: 0; overflow: hidden;">
+
+  <a-scene embedded arjs>
+    <!-- Marker for AR Detection -->
+    <a-marker preset="hiro" id="video-marker">
+      <!-- Play Video when marker is detected -->
+      <a-video id="ar-video" src="video.mp4" position="0 0 0" scale="2 2 2"></a-video>
+    </a-marker>
+
+    <a-camera></a-camera>
+  </a-scene>
+
+  <script>
+    const videoElement = document.getElementById('ar-video');
+    const marker = document.getElementById('video-marker');
+
+    marker.addEventListener('markerFound', function() {
+      // Play video once when marker is detected
+      videoElement.play();
+    });
+
+    marker.addEventListener('markerLost', function() {
+      // Pause the video when marker is lost
+      videoElement.pause();
+    });
+  </script>
+
+</body>
+</html>
