@@ -252,51 +252,38 @@ def train_arjs_marker(image_path: str, out_dir: str, slug: str, timeout: int = 1
 
 def build_pattern_marker(image_path: str, slug: str, media_root: str, marker_size_m=1.0):
     """
-    Enhanced pattern marker generation with better error handling and optimizations.
+    Generate AR.js NFT marker files (.iset/.fset/.fset3) into:
+      MEDIA_ROOT/markers/<slug>/<slug>.(iset|fset|fset3)
+    Returns True on success, False otherwise.
     """
     try:
         img = Path(image_path)
-        out_dir = Path(media_root) / "markers"
+        out_dir = Path(media_root) / "markers" / slug  # <— subfolder per slug
         out_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Check if image exists
+
         if not img.exists():
             logger.error(f"[marker] Image file not found: {img}")
-            return None
-        
-        # Check file size (warn if too large)
-        file_size = img.stat().st_size
-        if file_size > 5 * 1024 * 1024:  # 5MB
-            logger.warning(f"Large image file ({file_size / 1024 / 1024:.1f}MB) may cause timeout")
-            
-        # Check if Node.js is available
+            return False
+
         try:
             subprocess.run(["node", "--version"], capture_output=True, check=True)
         except (subprocess.SubprocessError, FileNotFoundError):
             logger.error("[marker] Node.js is not installed or not in PATH")
-            return None
-            
-        # Try to generate AR.js markers using enhanced train_arjs_marker function
-        logger.info(f"[marker] Generating AR.js markers for slug: {slug}")
-        success = train_arjs_marker(str(img), str(out_dir), slug)
-        
+            return False
+
+        logger.info(f"[marker] Generating AR.js NFT markers for slug: {slug}")
+        success = train_arjs_marker(str(img), str(out_dir), slug)  # train_arjs_marker will copy as <slug>.*
+
         if success:
-            logger.info(f"[marker] Successfully generated markers for {slug}")
-            return str(out_dir / f"{slug}.patt")  # Return pattern file path
+            logger.info(f"[marker] Successfully generated NFT markers for {slug}")
+            return True
         else:
-            logger.warning(f"[marker] Failed to generate markers for {slug}")
-            return None
-            
+            logger.warning(f"[marker] Failed to generate NFT markers for {slug}")
+            return False
+
     except Exception as e:
         logger.error(f"[marker] Error in build_pattern_marker: {str(e)}")
-        return None
-
-# Safe import for marker compiler
-try:
-    from .marker_compiler import MindARCompiler
-except ImportError:
-    MindARCompiler = None
-    logging.warning("MindARCompiler not available")
+        return False
 
 def home(request):
     return render(request, "home.html")
@@ -305,37 +292,86 @@ def scanner(request):
     return render(request, "scanner.html")
 
 def debug_markers(request, slug):
-    """Debug view to check marker file status"""
     experience = get_object_or_404(ARExperience, slug=slug)
-    
-    # Path to the markers folder
-    marker_dir = finders.find(f'markers/{slug}')
-    
+
+    marker_dir = Path(settings.MEDIA_ROOT) / "markers" / slug
     debug_info = {
         'slug': slug,
-        'marker_dir': marker_dir,
-        'marker_dir_exists': os.path.exists(marker_dir) if marker_dir else False,
+        'marker_dir': str(marker_dir),
+        'marker_dir_exists': marker_dir.exists(),
         'files': {}
     }
-    
+
     required_files = [f"{slug}.iset", f"{slug}.fset", f"{slug}.fset3"]
-    
-    if marker_dir:
+
+    if marker_dir.exists():
         for filename in required_files:
-            filepath = os.path.join(marker_dir, filename)
-            debug_info['files'][filename] = {
-                'exists': os.path.exists(filepath),
-                'size': os.path.getsize(filepath) if os.path.exists(filepath) else 0
+            filepath = marker_dir / filename
+            info = {
+                'exists': filepath.exists(),
+                'size': filepath.stat().st_size if filepath.exists() else 0
             }
-            
-            if os.path.exists(filepath):
+            if filepath.exists():
                 try:
-                    with open(filepath, 'r') as f:
-                        debug_info['files'][filename]['content_preview'] = f.read(200)
+                    with open(filepath, 'rb') as f:
+                        # NFT files are binary; avoid dumping contents
+                        info['content_preview'] = 'Binary OK'
                 except:
-                    debug_info['files'][filename]['content_preview'] = 'Binary file or read error'
-    
+                    info['content_preview'] = 'Binary file or read error'
+            debug_info['files'][filename] = info
+
     return JsonResponse(debug_info, indent=2)
+class ARMarkerProcessor:
+    def __init__(self):
+        # Your existing SURF parameters from logs
+        self.surf = cv2.xfeatures2d.SURF_create(100)  # SURF_FEATURE = 100
+        self.max_thresh = 0.9
+        self.min_thresh = 0.55
+        self.sd_thresh = 8.0
+        
+    def process_for_ar(self, image_path, marker_id):
+        """Process image with your existing parameters for AR tracking"""
+        img = cv2.imread(image_path)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Your existing multi-DPI processing
+        dpi_levels = [3.937, 4.960, 6.249, 7.874, 9.920, 12.499]
+        
+        marker_data = {
+            'id': marker_id,
+            'scales': []
+        }
+        
+        for i, dpi in enumerate(dpi_levels):
+            # Scale image according to your DPI logic
+            scale_factor = dpi / 3.937  # Base DPI
+            height, width = gray.shape
+            new_width = int(width * scale_factor)
+            new_height = int(height * scale_factor)
+            
+            scaled_img = cv2.resize(gray, (new_width, new_height))
+            
+            # Extract SURF features
+            kp, des = self.surf.detectAndCompute(scaled_img, None)
+            
+            if des is not None:
+                scale_data = {
+                    'level': i + 1,
+                    'dpi': dpi,
+                    'keypoints': len(kp),
+                    'size': [new_width, new_height]
+                }
+                marker_data['scales'].append(scale_data)
+        
+        # Save marker data for AR.js
+        marker_file = os.path.join(settings.MEDIA_ROOT, 'markers', f'{marker_id}.json')
+        os.makedirs(os.path.dirname(marker_file), exist_ok=True)
+        
+        with open(marker_file, 'w') as f:
+            json.dump(marker_data, f)
+            
+        return marker_data
+
 
 def upload_view(request):
     """Enhanced upload view with improved marker generation handling"""
@@ -444,31 +480,60 @@ def upload_view(request):
     
     return render(request, 'upload.html', context)
 
-def ar_experience_view(request, experience_id):
-    """Enhanced AR experience viewer with better error handling"""
-    try:
-        experience = ARExperience.objects.get(id=experience_id)
+def experience_view(request, slug):
+    experience = get_object_or_404(ARExperience, slug=slug)
 
-        # Prepare context with full URLs
-        context = {
-            'experience': experience,
-            'video_url': experience.video.url if experience.video else None,
-            'marker_url': experience.image.url if experience.image else None,
-            'title': experience.title,
-            'description': experience.description,
-            'slug': experience.slug,
-            'base_url': settings.BASE_URL,
-        }
+    base_url = getattr(settings, 'BASE_URL', request.build_absolute_uri('/')[:-1])
+    media_url = getattr(settings, 'MEDIA_URL', '/media/')
+    if not media_url.startswith('http'):
+        media_url = base_url + media_url  # absolute
 
-        return render(request, 'ar_viewer.html', context)
-        
-    except ARExperience.DoesNotExist:
-        messages.error(request, f'AR Experience with ID {experience_id} not found.')
-        return redirect('upload')
-    except Exception as e:
-        logger.error(f"Error loading AR experience {experience_id}: {str(e)}")
-        messages.error(request, 'Error loading AR experience. Please try again.')
-        return redirect('upload')
+    # AR.js expects the BASE path (no extension)
+    marker_base_url = f"{media_url}markers/{slug}/{slug}"
+
+    # Check local files exist and validate them
+    marker_dir = Path(settings.MEDIA_ROOT) / "markers" / slug
+    required = [marker_dir / f"{slug}.iset", marker_dir / f"{slug}.fset", marker_dir / f"{slug}.fset3"]
+    marker_files_exist = all(p.exists() and p.stat().st_size > 0 for p in required)
+
+    # If marker files don't exist or are empty, try to regenerate
+    if not marker_files_exist and experience.image:
+        logger.warning(f"⚠️ Marker files missing/invalid for {slug}, regenerating...")
+        try:
+            success = build_pattern_marker(
+                image_path=experience.image.path,
+                slug=experience.slug,
+                media_root=settings.MEDIA_ROOT
+            )
+            if success:
+                # Recheck after regeneration
+                marker_files_exist = all(p.exists() and p.stat().st_size > 0 for p in required)
+                logger.info(f"✅ Marker regeneration {'successful' if marker_files_exist else 'failed'} for {slug}")
+                # Update the database flag
+                experience.marker_generated = marker_files_exist
+                experience.save(update_fields=['marker_generated'])
+            else:
+                logger.error(f"❌ Marker regeneration failed for {slug}")
+        except Exception as e:
+            logger.error(f"❌ Error during marker regeneration for {slug}: {e}")
+
+    # Log marker status for debugging
+    if marker_files_exist:
+        file_sizes = [f"{p.name}: {p.stat().st_size}B" for p in required if p.exists()]
+        logger.info(f"📁 Marker files for {slug}: {', '.join(file_sizes)}")
+    else:
+        logger.warning(f"📁 Missing marker files for {slug}")
+
+    context = {
+        "experience": experience,
+        "marker_base_url": marker_base_url,  # e.g. /media/markers/<slug>/<slug>
+        "marker_files_exist": marker_files_exist,
+        "base_url": base_url,
+        "title": experience.title,
+        "video_url": experience.video.url if experience.video else None,
+    }
+    return render(request, "experience.html", context)
+
 
 def ar_experience_by_slug(request, slug):
     """AR experience viewer accessible by slug"""
@@ -607,40 +672,41 @@ def experience_view(request, slug):
     return render(request, "experience.html", context)
 
 def marker_status_api(request, slug):
-    """API endpoint to check marker generation status"""
     try:
         experience = get_object_or_404(ARExperience, slug=slug)
-        
-        # Check if marker files actually exist
-        marker_dir = Path(settings.MEDIA_ROOT) / "markers"
+
+        marker_dir = Path(settings.MEDIA_ROOT) / "markers" / slug
         required_files = [f"{slug}.iset", f"{slug}.fset", f"{slug}.fset3"]
-        
-        files_status = {}
-        all_exist = True
-        
+
+        files_status, all_exist = {}, True
         for filename in required_files:
-            filepath = marker_dir / filename
-            exists = filepath.exists()
-            size = filepath.stat().st_size if exists else 0
-            
+            fp = marker_dir / filename
+            exists = fp.exists()
             files_status[filename] = {
                 'exists': exists,
-                'size': size,
-                'path': str(filepath)
+                'size': fp.stat().st_size if exists else 0,
+                'path': str(fp)
             }
-            
-            if not exists:
-                all_exist = False
-        
+            all_exist &= exists
+
         return JsonResponse({
             'slug': slug,
-            'marker_generated': experience.marker_generated,
+            'marker_generated': experience.marker_generated and all_exist,
             'files_exist': all_exist,
             'files': files_status,
             'can_regenerate': bool(experience.image)
         })
-        
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
 # Remove the old train_arjs_marker_robust function - we're using the enhanced version above
+
+
+
+# ---- compatibility shim so old URLs keep working ----
+from django.shortcuts import get_object_or_404
+
+def ar_experience_view(request, experience_id: int):
+    """Back-compat: resolve by ID then reuse the slug-based view."""
+    exp = get_object_or_404(ARExperience, id=experience_id)
+    return ar_experience_by_slug(request, exp.slug)
