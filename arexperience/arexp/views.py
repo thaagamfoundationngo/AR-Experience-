@@ -18,6 +18,7 @@ import shutil
 import subprocess
 from PIL import Image, ImageEnhance
 import time
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -321,57 +322,6 @@ def debug_markers(request, slug):
             debug_info['files'][filename] = info
 
     return JsonResponse(debug_info, indent=2)
-class ARMarkerProcessor:
-    def __init__(self):
-        # Your existing SURF parameters from logs
-        self.surf = cv2.xfeatures2d.SURF_create(100)  # SURF_FEATURE = 100
-        self.max_thresh = 0.9
-        self.min_thresh = 0.55
-        self.sd_thresh = 8.0
-        
-    def process_for_ar(self, image_path, marker_id):
-        """Process image with your existing parameters for AR tracking"""
-        img = cv2.imread(image_path)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
-        # Your existing multi-DPI processing
-        dpi_levels = [3.937, 4.960, 6.249, 7.874, 9.920, 12.499]
-        
-        marker_data = {
-            'id': marker_id,
-            'scales': []
-        }
-        
-        for i, dpi in enumerate(dpi_levels):
-            # Scale image according to your DPI logic
-            scale_factor = dpi / 3.937  # Base DPI
-            height, width = gray.shape
-            new_width = int(width * scale_factor)
-            new_height = int(height * scale_factor)
-            
-            scaled_img = cv2.resize(gray, (new_width, new_height))
-            
-            # Extract SURF features
-            kp, des = self.surf.detectAndCompute(scaled_img, None)
-            
-            if des is not None:
-                scale_data = {
-                    'level': i + 1,
-                    'dpi': dpi,
-                    'keypoints': len(kp),
-                    'size': [new_width, new_height]
-                }
-                marker_data['scales'].append(scale_data)
-        
-        # Save marker data for AR.js
-        marker_file = os.path.join(settings.MEDIA_ROOT, 'markers', f'{marker_id}.json')
-        os.makedirs(os.path.dirname(marker_file), exist_ok=True)
-        
-        with open(marker_file, 'w') as f:
-            json.dump(marker_data, f)
-            
-        return marker_data
-
 
 def upload_view(request):
     """Enhanced upload view with improved marker generation handling"""
@@ -480,60 +430,395 @@ def upload_view(request):
     
     return render(request, 'upload.html', context)
 
-def experience_view(request, slug):
-    experience = get_object_or_404(ARExperience, slug=slug)
+# ===== ENHANCED EXPERIENCE VIEW WITH WEBCAM ACTIVATION =====
 
+def experience_view(request, slug):
+    """Enhanced experience view with webcam activation capabilities"""
+    experience = get_object_or_404(ARExperience, slug=slug)
+    
+    # Build the base URL for media files
     base_url = getattr(settings, 'BASE_URL', request.build_absolute_uri('/')[:-1])
     media_url = getattr(settings, 'MEDIA_URL', '/media/')
     if not media_url.startswith('http'):
-        media_url = base_url + media_url  # absolute
-
-    # AR.js expects the BASE path (no extension)
+        media_url = base_url + media_url
+    
+    # Path to marker files (without file extensions) - should be in MEDIA_ROOT
     marker_base_url = f"{media_url}markers/{slug}/{slug}"
-
-    # Check local files exist and validate them
-    marker_dir = Path(settings.MEDIA_ROOT) / "markers" / slug
-    required = [marker_dir / f"{slug}.iset", marker_dir / f"{slug}.fset", marker_dir / f"{slug}.fset3"]
-    marker_files_exist = all(p.exists() and p.stat().st_size > 0 for p in required)
-
-    # If marker files don't exist or are empty, try to regenerate
-    if not marker_files_exist and experience.image:
-        logger.warning(f"⚠️ Marker files missing/invalid for {slug}, regenerating...")
-        try:
+    
+    # Check if marker files exist in MEDIA_ROOT
+    marker_files_exist = False
+    try:
+        marker_dir = Path(settings.MEDIA_ROOT) / "markers" / slug
+        required_files = [f"{slug}.iset", f"{slug}.fset", f"{slug}.fset3"]
+        marker_files_exist = all(
+            (marker_dir / file).exists() for file in required_files
+        )
+        
+        if not marker_files_exist:
+            logger.warning(f"⚠️ Some marker files missing for {slug}, regenerating...")
+            # Try to regenerate marker files
             success = build_pattern_marker(
                 image_path=experience.image.path,
                 slug=experience.slug,
                 media_root=settings.MEDIA_ROOT
             )
+            
             if success:
+                logger.info(f"✅ Successfully regenerated marker files for {slug}")
                 # Recheck after regeneration
-                marker_files_exist = all(p.exists() and p.stat().st_size > 0 for p in required)
-                logger.info(f"✅ Marker regeneration {'successful' if marker_files_exist else 'failed'} for {slug}")
-                # Update the database flag
-                experience.marker_generated = marker_files_exist
-                experience.save(update_fields=['marker_generated'])
+                marker_files_exist = all(
+                    (marker_dir / file).exists() for file in required_files
+                )
             else:
-                logger.error(f"❌ Marker regeneration failed for {slug}")
-        except Exception as e:
-            logger.error(f"❌ Error during marker regeneration for {slug}: {e}")
-
-    # Log marker status for debugging
-    if marker_files_exist:
-        file_sizes = [f"{p.name}: {p.stat().st_size}B" for p in required if p.exists()]
-        logger.info(f"📁 Marker files for {slug}: {', '.join(file_sizes)}")
-    else:
-        logger.warning(f"📁 Missing marker files for {slug}")
-
+                logger.error(f"❌ Failed to regenerate marker files for {slug}")
+                marker_files_exist = False
+            
+    except Exception as e:
+        logger.error(f"❌ Error checking marker files for {slug}: {e}")
+        marker_files_exist = False
+    
+    # ===== WEBCAM ACTIVATION CONFIGURATION =====
+    webcam_config = {
+        'enabled': True,
+        'source_type': 'webcam',
+        'device_id': None,  # Auto-select camera
+        'facing_mode': 'environment',  # Rear camera preferred
+        'resolution': {
+            'width': 640,
+            'height': 480
+        },
+        'fps': 30,
+        'auto_focus': True,
+        'torch': False,
+        'permissions_required': ['camera'],
+        'https_required': True,
+        'fallback_message': 'Camera access is required for AR experience'
+    }
+    
+    # Feature detection settings
+    feature_detection_config = {
+        'tracking_method': 'best',
+        'detection_mode': 'mono',
+        'max_detection_rate': 60,
+        'canvas_width': 640,
+        'canvas_height': 480,
+        'smoothing': {
+            'enabled': True,
+            'count': 10,
+            'tolerance': 0.01,
+            'threshold': 5
+        }
+    }
+    
+    # AR overlay settings
+    ar_overlay_config = {
+        'video_opacity': 0.95,
+        'video_scale': {
+            'width': 1.6,
+            'height': 0.9
+        },
+        'position_offset': [0, 0, 0.01],
+        'rotation_offset': [-90, 0, 0],
+        'auto_play': True,
+        'loop_video': True,
+        'muted': True,
+        'preload': 'metadata'
+    }
+    
+    # Browser compatibility check
+    browser_requirements = {
+        'webrtc_support': True,
+        'webgl_support': True,
+        'https_required': True,
+        'modern_browser_required': True,
+        'supported_browsers': ['Chrome', 'Firefox', 'Safari', 'Edge'],
+        'minimum_versions': {
+            'Chrome': '60+',
+            'Firefox': '55+',
+            'Safari': '11+',
+            'Edge': '79+'
+        }
+    }
+    
     context = {
+        # Original context
         "experience": experience,
-        "marker_base_url": marker_base_url,  # e.g. /media/markers/<slug>/<slug>
+        "marker_base_url": marker_base_url,
         "marker_files_exist": marker_files_exist,
         "base_url": base_url,
         "title": experience.title,
         "video_url": experience.video.url if experience.video else None,
+        "marker_image_url": experience.image.url if experience.image else None,
+        "timestamp": int(time.time()),
+        
+        # ===== WEBCAM ACTIVATION CONTEXT =====
+        "webcam_enabled": True,
+        "webcam_config": json.dumps(webcam_config),
+        "feature_detection_config": json.dumps(feature_detection_config),
+        "ar_overlay_config": json.dumps(ar_overlay_config),
+        "browser_requirements": json.dumps(browser_requirements),
+        
+        # UI Configuration
+        "ui_config": json.dumps({
+            'show_debug_info': settings.DEBUG,
+            'show_fps_counter': True,
+            'show_feature_count': True,
+            'show_tracking_status': True,
+            'enable_manual_controls': True
+        }),
+        
+        # Instructions for users
+        "instructions": {
+            'setup': 'Allow camera access when prompted by your browser',
+            'usage': 'Point your camera at the uploaded marker image',
+            'distance': 'Hold your device 20-60cm away from the marker',
+            'lighting': 'Ensure good lighting for better tracking',
+            'stability': 'Keep the marker clearly visible and steady'
+        }
     }
+    
+    # Log webcam activation
+    logger.info(f"🎥 Webcam AR experience loaded for {slug} (Markers: {'✅' if marker_files_exist else '❌'})")
+    
     return render(request, "experience.html", context)
 
+# ===== WEBCAM-SPECIFIC VIEWS =====
+
+def webcam_ar_experience_view(request, slug=None):
+    """
+    Dedicated webcam AR experience view with full activation capabilities
+    """
+    
+    # Get experience by slug or latest available
+    if slug:
+        experience = get_object_or_404(ARExperience, slug=slug)
+    else:
+        try:
+            experience = ARExperience.objects.filter(
+                image__isnull=False,
+                video__isnull=False
+            ).latest('created_at')
+        except ARExperience.DoesNotExist:
+            logger.warning("No AR experiences available")
+            experience = None
+    
+    # Build base URLs for media files
+    base_url = getattr(settings, 'BASE_URL', request.build_absolute_uri('/')[:-1])
+    media_url = getattr(settings, 'MEDIA_URL', '/media/')
+    if not media_url.startswith('http'):
+        media_url = base_url + media_url
+    
+    # Initialize default values
+    marker_base_url = ""
+    marker_files_exist = False
+    
+    if experience:
+        # Path to NFT marker descriptor files (without extensions)
+        marker_base_url = f"{media_url}markers/{experience.slug}/{experience.slug}"
+        
+        # Check if marker files exist for feature matching
+        try:
+            marker_dir = Path(settings.MEDIA_ROOT) / "markers" / experience.slug
+            required_files = [
+                f"{experience.slug}.iset",  # Image set for NFT tracking
+                f"{experience.slug}.fset",  # Feature set descriptors
+                f"{experience.slug}.fset3"  # Extended feature descriptors
+            ]
+            
+            marker_files_exist = all(
+                (marker_dir / file).exists() for file in required_files
+            )
+            
+            # Auto-regenerate marker files if missing
+            if not marker_files_exist:
+                logger.info(f"🔄 Regenerating marker files for {experience.slug}")
+                try:
+                    success = build_pattern_marker(
+                        image_path=experience.image.path,
+                        slug=experience.slug,
+                        media_root=settings.MEDIA_ROOT
+                    )
+                    
+                    if success:
+                        # Verify files were created
+                        marker_files_exist = all(
+                            (marker_dir / file).exists() for file in required_files
+                        )
+                        logger.info(f"✅ Marker files regenerated for {experience.slug}")
+                    else:
+                        logger.error(f"❌ Failed to regenerate marker files for {experience.slug}")
+                        
+                except Exception as e:
+                    logger.error(f"❌ Error regenerating markers for {experience.slug}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"❌ Error checking marker files for {experience.slug}: {e}")
+    
+    # Comprehensive webcam configuration
+    webcam_config = {
+        'enabled': True,
+        'auto_activate': True,
+        'source_type': 'webcam',
+        'device_constraints': {
+            'video': {
+                'width': {'ideal': 640, 'max': 1280},
+                'height': {'ideal': 480, 'max': 720},
+                'frameRate': {'ideal': 30, 'max': 60},
+                'facingMode': 'environment'
+            },
+            'audio': False
+        },
+        'permissions': {
+            'required': ['camera'],
+            'optional': [],
+            'fallback_message': 'Please allow camera access to use AR features'
+        },
+        'debug_mode': settings.DEBUG
+    }
+    
+    # AR processing configuration
+    ar_processing_config = {
+        'tracking_method': 'best',
+        'source_type': 'webcam',
+        'debug_ui_enabled': settings.DEBUG,
+        'detection_mode': 'mono',
+        'matrix_code_type': '3x3',
+        'max_detection_rate': 60,
+        'canvas_width': 640,
+        'canvas_height': 480,
+        'label_color': 'white',
+        'label_size': '0.5em'
+    }
+    
+    # Feature matching configuration  
+    feature_config = {
+        'detection_threshold': 0.7,
+        'tracking_stability': 5,
+        'max_keypoints': 500,
+        'smoothing_factor': 0.8,
+        'loss_threshold': 3,
+        'confidence_threshold': 0.6
+    }
+    
+    # Video overlay configuration
+    video_config = {
+        'opacity': 0.95,
+        'scale': {'width': 1.6, 'height': 0.9},
+        'position': [0, 0, 0.01],
+        'rotation': [-90, 0, 0],
+        'auto_play': True,
+        'loop': True,
+        'muted': True,
+        'preload': 'metadata',
+        'playsinline': True,
+        'webkit_playsinline': True,
+        'crossorigin': 'anonymous'
+    }
+    
+    context = {
+        # Core experience data
+        "experience": experience,
+        "title": experience.title if experience else "AR Experience",
+        "description": experience.description if experience else "Webcam AR Experience",
+        
+        # Marker and video data
+        "marker_base_url": marker_base_url,
+        "marker_files_exist": marker_files_exist,
+        "marker_image_url": experience.image.url if experience and experience.image else None,
+        "video_url": experience.video.url if experience and experience.video else None,
+        
+        # Webcam activation configs (JSON serialized for frontend)
+        "webcam_config": json.dumps(webcam_config),
+        "ar_processing_config": json.dumps(ar_processing_config),
+        "feature_config": json.dumps(feature_config),
+        "video_config": json.dumps(video_config),
+        
+        # Technical parameters
+        "base_url": base_url,
+        "timestamp": int(time.time()),
+        "debug_mode": settings.DEBUG,
+        
+        # Browser compatibility
+        "browser_requirements": json.dumps({
+            "webrtc_support": True,
+            "webgl_support": True,
+            "https_required": True,
+            "getUserMedia_required": True,
+            "modern_browser_required": True
+        }),
+        
+        # User instructions
+        "user_instructions": {
+            "camera_setup": "Allow camera access when prompted",
+            "marker_usage": "Point camera at the uploaded image",
+            "optimal_distance": "20-60cm from marker",
+            "lighting_tips": "Ensure good lighting for tracking",
+            "stability_advice": "Keep marker visible and steady"
+        }
+    }
+    
+    # Log webcam AR activation
+    if experience:
+        logger.info(f"🎥📱 Webcam AR activated: {experience.title} (Markers: {'✅' if marker_files_exist else '❌'})")
+    
+    return render(request, "webcam_ar.html", context)
+
+def ar_status_api(request, slug):
+    """
+    API endpoint to check AR experience status and webcam readiness
+    """
+    try:
+        experience = get_object_or_404(ARExperience, slug=slug)
+        
+        # Check marker files
+        marker_dir = Path(settings.MEDIA_ROOT) / "markers" / experience.slug
+        required_files = [f"{experience.slug}.iset", f"{experience.slug}.fset", f"{experience.slug}.fset3"]
+        marker_files_exist = all((marker_dir / file).exists() for file in required_files)
+        
+        status = {
+            "success": True,
+            "experience": {
+                "title": experience.title,
+                "slug": experience.slug,
+                "created": experience.created_at.isoformat(),
+            },
+            "markers": {
+                "exist": marker_files_exist,
+                "files": required_files,
+                "base_url": f"/media/markers/{experience.slug}/{experience.slug}"
+            },
+            "media": {
+                "image_available": bool(experience.image),
+                "video_available": bool(experience.video),
+                "image_url": experience.image.url if experience.image else None,
+                "video_url": experience.video.url if experience.video else None
+            },
+            "webcam": {
+                "required": True,
+                "permissions_needed": ["camera"],
+                "https_required": True,
+                "auto_activate": True
+            },
+            "timestamp": int(time.time())
+        }
+        
+        return JsonResponse(status)
+        
+    except ARExperience.DoesNotExist:
+        return JsonResponse({
+            "success": False,
+            "error": "AR Experience not found",
+            "timestamp": int(time.time())
+        }, status=404)
+    except Exception as e:
+        logger.error(f"AR Status API error: {e}")
+        return JsonResponse({
+            "success": False,
+            "error": "Internal server error",
+            "timestamp": int(time.time())
+        }, status=500)
+
+# ===== EXISTING FUNCTIONS (UNCHANGED) =====
 
 def ar_experience_by_slug(request, slug):
     """AR experience viewer accessible by slug"""
@@ -549,6 +834,7 @@ def ar_experience_by_slug(request, slug):
             'description': experience.description,
             'slug': experience.slug,
             'base_url': settings.BASE_URL,
+            'webcam_enabled': True,  # Enable webcam for this view
         }
 
         return render(request, 'ar_viewer.html', context)
@@ -617,59 +903,9 @@ def qr_view(request, slug):
     return render(request, 'experience.html', {
         'experience': experience,
         'qr_data': qr_data,
-        'experience_url': experience_url
+        'experience_url': experience_url,
+        'webcam_enabled': True,  # Enable webcam for QR view
     })
-
-def experience_view(request, slug):
-    experience = get_object_or_404(ARExperience, slug=slug)
-    
-    # Build the base URL for static files
-    base_url = getattr(settings, 'BASE_URL', 'http://127.0.0.1:8000')
-    static_url = f"{base_url}/static/"
-
-    # Path to marker files (without file extensions)
-    marker_base_url = f"{static_url}markers/{slug}/{slug}"
-
-    # Check if marker files exist
-    marker_files_exist = False
-    try:
-        # Use django's static file finder instead of os.path.join for static files
-        marker_dir = finders.find(f'markers/{slug}')
-        
-        if marker_dir:
-            required_files = [f"{slug}.iset", f"{slug}.fset", f"{slug}.fset3"]
-            marker_files_exist = all(
-                os.path.exists(os.path.join(marker_dir, file)) for file in required_files
-            )
-        
-        if not marker_files_exist:
-            logger.warning(f"⚠️ Some marker files missing for {slug}, regenerating...")
-            # Try to regenerate marker files
-            patt_path = build_pattern_marker(
-                image_path=experience.image.path,
-                slug=experience.slug,
-                media_root=settings.MEDIA_ROOT
-            )
-            
-            if patt_path:
-                logger.info(f"✅ Successfully regenerated marker files for {slug}")
-                marker_files_exist = True
-            else:
-                logger.error(f"❌ Failed to regenerate marker files for {slug}")
-                marker_files_exist = False
-            
-    except Exception as e:
-        logger.error(f"❌ Error checking marker files for {slug}: {e}")
-        marker_files_exist = False
-    
-    context = {
-        "experience": experience,
-        "marker_base_url": marker_base_url,
-        "marker_files_exist": marker_files_exist,
-        "base_url": base_url,
-    }
-    
-    return render(request, "experience.html", context)
 
 def marker_status_api(request, slug):
     try:
@@ -694,19 +930,50 @@ def marker_status_api(request, slug):
             'marker_generated': experience.marker_generated and all_exist,
             'files_exist': all_exist,
             'files': files_status,
-            'can_regenerate': bool(experience.image)
+            'can_regenerate': bool(experience.image),
+            'webcam_ready': all_exist  # Webcam ready status
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-# Remove the old train_arjs_marker_robust function - we're using the enhanced version above
+def webcam_ar_debug_view(request, slug):
+    """
+    Debug view for webcam AR experience development and troubleshooting
+    """
+    experience = get_object_or_404(ARExperience, slug=slug)
+    
+    # Detailed marker file analysis
+    marker_dir = Path(settings.MEDIA_ROOT) / "markers" / experience.slug
+    marker_analysis = {}
+    
+    for ext in ['.iset', '.fset', '.fset3']:
+        file_path = marker_dir / f"{experience.slug}{ext}"
+        marker_analysis[ext] = {
+            'exists': file_path.exists(),
+            'size': file_path.stat().st_size if file_path.exists() else 0,
+            'modified': file_path.stat().st_mtime if file_path.exists() else None
+        }
+    
+    debug_context = {
+        "experience": experience,
+        "marker_analysis": marker_analysis,
+        "media_root": str(settings.MEDIA_ROOT),
+        "debug_mode": True,
+        "webcam_debug": True,
+        "ar_js_version": "3.4.5",
+        "aframe_version": "1.5.0",
+        "webcam_config": {
+            'enabled': True,
+            'debug_ui': True,
+            'show_stats': True
+        }
+    }
+    
+    return render(request, "webcam_ar_debug.html", debug_context)
 
-
-
-# ---- compatibility shim so old URLs keep working ----
-from django.shortcuts import get_object_or_404
+# ===== COMPATIBILITY FUNCTIONS =====
 
 def ar_experience_view(request, experience_id: int):
-    """Back-compat: resolve by ID then reuse the slug-based view."""
+    """Back-compat: resolve by ID then reuse the slug-based view with webcam."""
     exp = get_object_or_404(ARExperience, id=experience_id)
-    return ar_experience_by_slug(request, exp.slug)
+    return experience_view(request, exp.slug)  # Use enhanced experience_view with webcam

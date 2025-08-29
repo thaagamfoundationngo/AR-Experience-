@@ -2,421 +2,454 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
-  <title>{{ title|default:experience.title }}</title>
-
-  <!-- Preloading scripts to prevent caching and ensure reloading -->
-  <script src="{% static 'arexp/aframe.min.js' %}?v={{ timestamp }}"></script>
-  <script src="{% static 'arexp/aframe-ar-nft.js' %}?v={{ timestamp }}"></script>
-  <script src="{% static 'arexp/ar-threex.js' %}?v={{ timestamp }}"></script>
-
-  <style>
-    html, body {
-      margin: 0;
-      overflow: hidden;
-      background: #000;
-      font-family: Arial, sans-serif;
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+    <title>{{ title|default:experience.title }} - AR Experience</title>
+    
+    <!-- Force HTTPS (Critical for camera) -->
+    <script>
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        location.replace(`https:${location.href.substring(location.protocol.length)}`);
     }
-
-    #loading {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.9);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
-      color: white;
-      transition: opacity 0.5s;
-    }
-
-    #loading.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    .spinner {
-      border: 3px solid #333;
-      border-top: 3px solid #00ff00;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-      margin-bottom: 15px;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    #status {
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      color: white;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 10px;
-      border-radius: 8px;
-      font-size: 12px;
-      z-index: 999;
-      max-width: 280px;
-      line-height: 1.4;
-    }
-
-    #instructions {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: white;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 15px 20px;
-      border-radius: 12px;
-      text-align: center;
-      font-size: 14px;
-      z-index: 999;
-      transition: opacity 0.3s;
-      max-width: 300px;
-    }
-
-    #instructions.hidden {
-      opacity: 0;
-    }
-
-    .status-indicator {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      margin-right: 5px;
-    }
-
-    .status-ready { background: #00ff00; }
-    .status-searching { background: #ff9500; animation: pulse 1s infinite; }
-    .status-tracking { background: #0099ff; }
-    .status-error { background: #ff0000; }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-  </style>
+    </script>
+    
+    <!-- LOCAL JS FILES -->
+    <script src="{% static 'arexp/three.min.js' %}"></script>
+    <script src="{% static 'arexp/aframe.min.js' %}"></script>
+    <script src="{% static 'arexp/aframe-ar-nft.js' %}"></script>
+    
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: Arial, sans-serif;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* FORCE CAMERA FEED VISIBILITY */
+        a-scene {
+            display: block !important;
+            visibility: visible !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 1 !important;
+        }
+        
+        a-scene canvas {
+            display: block !important;
+            visibility: visible !important;
+            width: 100% !important;
+            height: 100% !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+        }
+        
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+        }
+        
+        #loading.hidden {
+            display: none !important;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #333;
+            border-top: 3px solid #00ff00;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        #status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 999;
+            font-family: monospace;
+        }
+        
+        #instructions {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            z-index: 999;
+            max-width: 320px;
+        }
+    </style>
 </head>
 <body>
-  <!-- Loading Screen -->
-  <div id="loading">
-    <div class="spinner"></div>
-    <div id="loading-text">Initializing AR Camera...</div>
-    <div style="margin-top: 10px; font-size: 12px; opacity: 0.8;">
-      Please allow camera access
+    <!-- Loading Screen -->
+    <div id="loading">
+        <div class="spinner"></div>
+        <h2>🎥 Starting Camera Feed...</h2>
+        <p>Initializing AR camera display...</p>
     </div>
-  </div>
-  
-  <!-- Status Display -->
-  <div id="status">
-    <div><span class="status-indicator status-ready" id="camera-indicator"></span><strong>Camera:</strong> <span id="camera-status">Loading...</span></div>
-    <div><span class="status-indicator status-searching" id="tracking-indicator"></span><strong>Tracking:</strong> <span id="tracking-status">Searching...</span></div>
-    <div><span class="status-indicator status-ready" id="video-indicator"></span><strong>Video:</strong> <span id="video-status">Ready</span></div>
-  </div>
-  
-  <!-- Instructions -->
-  <div id="instructions">
-    <div style="font-size: 16px; margin-bottom: 8px;">📱 <strong>Point at the image</strong></div>
-    <div>Keep the marker clearly visible and steady.<br>Video will auto-play when detected.</div>
-  </div>
-
-  <a-scene
-    id="ar-scene"
-    vr-mode-ui="enabled:false"
-    renderer="antialias:true;alpha:true;precision:mediump;colorManagement:true"
-    embedded
-    arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled:false; detectionMode: mono; matrixCodeType: 3x3;"
-  >
-    <a-assets>
-      {% if experience.video %}
-      <video 
-        id="clip" 
-        src="{{ experience.video.url }}" 
-        loop 
-        muted 
-        playsinline 
-        webkit-playsinline 
-        crossorigin="anonymous"
-        preload="metadata">
-      </video>
-      {% endif %}
-    </a-assets>
-
-    {% if marker_files_exist %}
-    <a-nft
-      id="nft-marker"
-      type="nft"
-      url="{{ marker_base_url }}"
-      smooth="true" 
-      smoothCount="10" 
-      smoothTolerance="0.01" 
-      smoothThreshold="5"
-    >
-      {% if experience.video %}
-      <!-- Enhanced Video Plane with Frame -->
-      <a-video 
-        id="video-plane"
-        src="#clip" 
-        position="0 0 0.01" 
-        rotation="-90 0 0" 
-        width="1.6" 
-        height="0.9"
-        opacity="0.95"
-        visible="true">
-      </a-video>
-      
-      <!-- Video Frame -->
-      <a-box 
-        position="0 0 0" 
-        rotation="-90 0 0" 
-        depth="0.005" 
-        width="1.65" 
-        height="0.95" 
-        color="#222"
-        opacity="0.8">
-      </a-box>
-      
-      {% else %}
-      <!-- Fallback when no video -->
-      <a-box 
-        position="0 0 0" 
-        rotation="-90 0 0" 
-        depth="0.01" 
-        width="1.6" 
-        height="0.9" 
-        color="#0099ff"
-        opacity="0.8">
-      </a-box>
-      
-      <a-text 
-        value="AR Content Ready" 
-        position="0 0 0.02" 
-        rotation="-90 0 0" 
-        align="center" 
-        color="#fff"
-        scale="0.5 0.5 0.5">
-      </a-text>
-      {% endif %}
-    </a-nft>
-    {% else %}
-    <!-- Error state -->
-    <a-entity position="0 0 -1">
-      <a-text 
-        value="Marker files missing or invalid" 
-        color="#ff4444" 
-        align="center"
-        scale="0.8 0.8 0.8">
-      </a-text>
-    </a-entity>
-    {% endif %}
-
-    <a-entity camera look-controls-enabled="false" arjs-look-controls="smoothingFactor: 0.1"></a-entity>
-  </a-scene>
-
-  <script>
-    // Enhanced AR Video Controller
-    class ARController {
-      constructor() {
-        this.isTracking = false;
-        this.videoLoaded = false;
-        this.trackingCount = 0;
-        this.minTrackingFrames = 3; // Stability threshold
-        
-        this.initElements();
-        this.setupEventListeners();
-        this.initializeAR();
-      }
-      
-      initElements() {
-        this.scene = document.getElementById('ar-scene');
-        this.nftMarker = document.getElementById('nft-marker');
-        this.video = document.getElementById('clip');
-        this.videoPlane = document.getElementById('video-plane');
-        
-        // UI elements
-        this.loadingEl = document.getElementById('loading');
-        this.instructionsEl = document.getElementById('instructions');
-        this.cameraStatus = document.getElementById('camera-status');
-        this.trackingStatus = document.getElementById('tracking-status');
-        this.videoStatus = document.getElementById('video-status');
-        this.cameraIndicator = document.getElementById('camera-indicator');
-        this.trackingIndicator = document.getElementById('tracking-indicator');
-        this.videoIndicator = document.getElementById('video-indicator');
-      }
-      
-      setupEventListeners() {
-        // AR.js marker events
-        if (this.nftMarker) {
-          this.nftMarker.addEventListener('markerFound', () => this.onMarkerFound());
-          this.nftMarker.addEventListener('markerLost', () => this.onMarkerLost());
-        }
-        
-        // Video events
-        if (this.video) {
-          this.video.addEventListener('loadeddata', () => this.onVideoLoaded());
-          this.video.addEventListener('canplay', () => this.onVideoCanPlay());
-          this.video.addEventListener('play', () => this.onVideoPlay());
-          this.video.addEventListener('pause', () => this.onVideoPause());
-          this.video.addEventListener('error', (e) => this.onVideoError(e));
-          
-          // Preload video
-          this.video.load();
-        }
-        
-        // Scene ready
-        if (this.scene) {
-          this.scene.addEventListener('loaded', () => this.onSceneLoaded());
-          this.scene.addEventListener('arjs-video-loaded', () => this.onCameraReady());
-        }
-        
-        // Handle page visibility changes
-        document.addEventListener('visibilitychange', () => {
-          if (document.hidden && this.video && !this.video.paused) {
-            this.video.pause();
-          }
-        });
-      }
-      
-      initializeAR() {
-        // Hide loading after a timeout as fallback
-        setTimeout(() => {
-          if (this.loadingEl && !this.loadingEl.classList.contains('hidden')) {
-            this.hideLoading();
-          }
-        }, 8000);
-      }
-      
-      onSceneLoaded() {
-        console.log('AR Scene loaded');
-        this.updateStatus('camera', 'Initializing camera...', 'searching');
-      }
-      
-      onCameraReady() {
-        console.log('Camera ready');
-        this.updateStatus('camera', 'Ready', 'ready');
-        this.hideLoading();
-      }
-      
-      onVideoLoaded() {
-        console.log('Video loaded');
-        this.videoLoaded = true;
-        this.updateStatus('video', 'Loaded', 'ready');
-      }
-      
-      onVideoCanPlay() {
-        console.log('Video can play');
-        this.updateStatus('video', 'Ready to play', 'ready');
-      }
-      
-      onVideoPlay() {
-        console.log('Video started playing');
-        this.updateStatus('video', 'Playing', 'tracking');
-        if (this.instructionsEl) {
-          this.instructionsEl.classList.add('hidden');
-        }
-      }
-      
-      onVideoPause() {
-        console.log('Video paused');
-        this.updateStatus('video', 'Paused', 'ready');
-      }
-      
-      onVideoError(error) {
-        console.error('Video error:', error);
-        this.updateStatus('video', 'Error loading video', 'error');
-      }
-      
-      onMarkerFound() {
-        console.log('Marker found');
-        this.trackingCount++;
-        
-        if (this.trackingCount >= this.minTrackingFrames && !this.isTracking) {
-          this.isTracking = true;
-          this.updateStatus('tracking', 'Tracking active', 'tracking');
-          
-          // Auto-play video with error handling
-          if (this.video && this.videoLoaded) {
-            this.video.play()
-              .then(() => {
-                console.log('Video auto-play successful');
-              })
-              .catch(error => {
-                console.warn('Auto-play failed, user interaction required:', error);
-                this.updateStatus('video', 'Tap to play', 'ready');
-                
-                // Add click handler for manual play
-                this.addPlayClickHandler();
-              });
-          }
-        }
-      }
-      
-      onMarkerLost() {
-        console.log('Marker lost');
-        this.trackingCount = Math.max(0, this.trackingCount - 2);
-        
-        if (this.trackingCount === 0 && this.isTracking) {
-          this.isTracking = false;
-          this.updateStatus('tracking', 'Searching...', 'searching');
-          
-          if (this.instructionsEl) {
-            this.instructionsEl.classList.remove('hidden');
-          }
-          
-          // Pause video when marker is lost
-          if (this.video && !this.video.paused) {
-            this.video.pause();
-          }
-        }
-      }
-      
-      addPlayClickHandler() {
-        const clickHandler = () => {
-          if (this.video && this.isTracking) {
-            this.video.play().catch(console.error);
-            document.removeEventListener('click', clickHandler);
-            document.removeEventListener('touchstart', clickHandler);
-          }
-        };
-        
-        document.addEventListener('click', clickHandler);
-        document.addEventListener('touchstart', clickHandler);
-      }
-      
-      updateStatus(type, message, status) {
-        const statusEl = this[`${type}Status`];
-        const indicatorEl = this[`${type}Indicator`];
-        
-        if (statusEl) statusEl.textContent = message;
-        if (indicatorEl) {
-          indicatorEl.className = `status-indicator status-${status}`;
-        }
-      }
-      
-      hideLoading() {
-        if (this.loadingEl) {
-          this.loadingEl.classList.add('hidden');
-        }
-      }
-    }
     
-    // Initialize AR Controller when DOM is ready
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => new ARController());
-    } else {
-      new ARController();
-    }
-  </script>
+    <!-- Status Display -->
+    <div id="status">
+        <div>📹 Camera: <span id="camera-status">Initializing...</span></div>
+        <div>🎯 Tracking: <span id="tracking-status">Waiting...</span></div>
+        <div>🎬 Video: <span id="video-status">Loading...</span></div>
+        <div>📺 Feed: <span id="feed-status">Starting...</span></div>
+    </div>
+    
+    <!-- Instructions -->
+    <div id="instructions">
+        <div style="font-size: 18px; margin-bottom: 10px;">🎯 Camera Ready</div>
+        <div>Camera feed should be visible. Point at your marker image to see video overlay.</div>
+    </div>
+    
+    <!-- ENHANCED AR SCENE WITH FORCED DISPLAY -->
+    <a-scene
+        id="ar-scene"
+        vr-mode-ui="enabled: false"
+        renderer="antialias: true; alpha: true; precision: mediump; colorManagement: true;"
+        embedded
+        arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; displayWidth: 640; displayHeight: 480;"
+        style="display: block; width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 1;"
+    >
+        <a-assets>
+            {% if experience.video %}
+            <video 
+                id="ar-video" 
+                src="{{ experience.video.url }}" 
+                loop 
+                muted 
+                playsinline 
+                webkit-playsinline 
+                crossorigin="anonymous"
+                preload="metadata">
+            </video>
+            {% endif %}
+        </a-assets>
+        
+        {% if marker_files_exist %}
+        <a-nft
+            id="nft-marker"
+            type="nft"
+            url="{{ marker_base_url }}"
+            smooth="true" 
+            smoothCount="10" 
+            smoothTolerance="0.01" 
+            smoothThreshold="5"
+        >
+            {% if experience.video %}
+            <a-video 
+                id="video-overlay"
+                src="#ar-video" 
+                position="0 0 0.01" 
+                rotation="-90 0 0" 
+                width="1.6" 
+                height="0.9"
+                opacity="0"
+                visible="false">
+            </a-video>
+            {% endif %}
+        </a-nft>
+        {% else %}
+        <a-entity position="0 0 -1">
+            <a-text 
+                value="Marker files missing" 
+                color="#ff4444" 
+                align="center">
+            </a-text>
+        </a-entity>
+        {% endif %}
+        
+        <a-entity camera></a-entity>
+    </a-scene>
+    
+    <script>
+        let arInitialized = false;
+        let cameraFeedVisible = false;
+        
+        function safeUpdate(elementId, text) {
+            try {
+                const el = document.getElementById(elementId);
+                if (el) el.textContent = text;
+            } catch (error) {
+                console.warn(`Error updating ${elementId}:`, error.message);
+            }
+        }
+        
+        function hideLoading() {
+            try {
+                const loading = document.getElementById('loading');
+                if (loading) {
+                    loading.classList.add('hidden');
+                    loading.style.display = 'none';
+                }
+            } catch (error) {
+                console.warn('Error hiding loading:', error.message);
+            }
+        }
+        
+        // FORCE SCENE VISIBILITY
+        function forceSceneDisplay() {
+            const scene = document.getElementById('ar-scene');
+            if (scene) {
+                scene.style.display = 'block';
+                scene.style.visibility = 'visible';
+                scene.style.width = '100vw';
+                scene.style.height = '100vh';
+                scene.style.position = 'fixed';
+                scene.style.top = '0';
+                scene.style.left = '0';
+                scene.style.zIndex = '1';
+                
+                // Force canvas visibility
+                const canvas = scene.querySelector('canvas');
+                if (canvas) {
+                    canvas.style.display = 'block';
+                    canvas.style.visibility = 'visible';
+                    canvas.style.width = '100%';
+                    canvas.style.height = '100%';
+                    console.log('🎬 Forced canvas display');
+                    safeUpdate('feed-status', 'Canvas Active');
+                } else {
+                    console.log('⏳ Canvas not ready yet');
+                }
+            }
+        }
+        
+        // ENHANCED CAMERA INITIALIZATION
+        async function initializeCamera() {
+            try {
+                console.log('📹 Enhanced camera initialization...');
+                safeUpdate('camera-status', 'Requesting...');
+                
+                const constraints = {
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    },
+                    audio: false
+                };
+                
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                console.log('✅ Camera stream active:', stream.active);
+                safeUpdate('camera-status', 'Stream Active');
+                
+                const videoTracks = stream.getVideoTracks();
+                if (videoTracks.length > 0) {
+                    console.log('📹 Video track enabled:', videoTracks[0].enabled);
+                    safeUpdate('camera-status', 'Track Active');
+                }
+                
+                // Force scene display immediately
+                forceSceneDisplay();
+                safeUpdate('feed-status', 'Initializing...');
+                
+                // Let AR.js take over after brief delay
+                setTimeout(() => {
+                    stream.getTracks().forEach(track => track.stop());
+                    console.log('🔄 Handed stream to AR.js');
+                    safeUpdate('feed-status', 'AR.js Active');
+                }, 1000);
+                
+            } catch (error) {
+                console.error('❌ Camera initialization failed:', error);
+                safeUpdate('camera-status', 'Failed: ' + error.name);
+                safeUpdate('feed-status', 'Error');
+                
+                // Still try to show scene
+                forceSceneDisplay();
+                alert('Camera error: ' + error.message + '\n\nEnsure you are using HTTPS and have granted camera permissions.');
+            }
+        }
+        
+        function initializeAR() {
+            if (arInitialized) return;
+            arInitialized = true;
+            
+            console.log('🚀 Initializing AR with camera feed display fixes...');
+            
+            // Force scene display first
+            forceSceneDisplay();
+            
+            const elements = {
+                scene: document.getElementById('ar-scene'),
+                marker: document.getElementById('nft-marker'),
+                video: document.getElementById('ar-video'),
+                overlay: document.getElementById('video-overlay')
+            };
+            
+            console.log('🔍 Elements found:', {
+                scene: !!elements.scene,
+                marker: !!elements.marker,
+                video: !!elements.video,
+                overlay: !!elements.overlay
+            });
+            
+            // Initialize camera with display forcing
+            initializeCamera();
+            
+            // Setup events
+            if (elements.marker) {
+                elements.marker.addEventListener('markerFound', function() {
+                    console.log('🎯 Marker found!');
+                    safeUpdate('tracking-status', 'Active');
+                    
+                    if (elements.video && elements.overlay) {
+                        elements.overlay.setAttribute('visible', 'true');
+                        elements.overlay.setAttribute('opacity', '0.95');
+                        
+                        elements.video.play().then(() => {
+                            console.log('▶️ Video playing');
+                            safeUpdate('video-status', 'Playing');
+                        }).catch(error => {
+                            console.warn('⚠️ Video play blocked:', error);
+                            safeUpdate('video-status', 'Tap to play');
+                        });
+                    }
+                });
+                
+                elements.marker.addEventListener('markerLost', function() {
+                    console.log('❌ Marker lost!');
+                    safeUpdate('tracking-status', 'Searching...');
+                    
+                    if (elements.overlay) {
+                        elements.overlay.setAttribute('visible', 'false');
+                        elements.overlay.setAttribute('opacity', '0');
+                    }
+                    
+                    if (elements.video && !elements.video.paused) {
+                        elements.video.pause();
+                        safeUpdate('video-status', 'Paused');
+                    }
+                });
+            }
+            
+            if (elements.video) {
+                elements.video.addEventListener('loadeddata', function() {
+                    console.log('🎥 Video data loaded');
+                    safeUpdate('video-status', 'Ready');
+                });
+            }
+            
+            if (elements.scene) {
+                elements.scene.addEventListener('loaded', function() {
+                    console.log('📱 AR Scene loaded');
+                    forceSceneDisplay();
+                });
+                
+                elements.scene.addEventListener('renderstart', function() {
+                    console.log('🎬 Rendering started');
+                    safeUpdate('feed-status', 'Rendering');
+                    cameraFeedVisible = true;
+                    
+                    // Hide loading once rendering starts
+                    setTimeout(hideLoading, 1000);
+                });
+                
+                elements.scene.addEventListener('arjs-video-loaded', function() {
+                    console.log('📹 AR.js video stream loaded');
+                    safeUpdate('feed-status', 'Video Stream Active');
+                    cameraFeedVisible = true;
+                    hideLoading();
+                });
+            }
+            
+            // Continuous scene visibility enforcement
+            const visibilityInterval = setInterval(() => {
+                if (cameraFeedVisible) {
+                    clearInterval(visibilityInterval);
+                    return;
+                }
+                forceSceneDisplay();
+            }, 2000);
+            
+            // Fallback loading hide
+            setTimeout(() => {
+                if (!cameraFeedVisible) {
+                    console.log('⏰ Fallback: hiding loading screen');
+                    hideLoading();
+                    safeUpdate('feed-status', 'Check feed');
+                }
+            }, 8000);
+        }
+        
+        // Initialize with proper timing
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(initializeAR, 1000);
+            });
+        } else {
+            setTimeout(initializeAR, 1000);
+        }
+        
+        // Additional initialization methods
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                forceSceneDisplay();
+                if (!arInitialized) initializeAR();
+            }, 1500);
+        });
+        
+        // Force visibility every few seconds until feed is visible
+        setInterval(() => {
+            if (!cameraFeedVisible && arInitialized) {
+                forceSceneDisplay();
+            }
+        }, 3000);
+        
+        // Enhanced error handling
+        window.addEventListener('error', function(event) {
+            if (event.error && event.error.message && 
+                !event.error.message.includes('style')) {
+                console.error('🚨 Error:', event.error.message);
+            }
+        });
+        
+        // Debug function
+        function debugCameraFeed() {
+            console.log('🔍 Camera Feed Debug:', {
+                initialized: arInitialized,
+                feedVisible: cameraFeedVisible,
+                scene: !!document.getElementById('ar-scene'),
+                canvas: !!document.querySelector('a-scene canvas'),
+                protocol: location.protocol
+            });
+        }
+        
+        setTimeout(debugCameraFeed, 5000);
+    </script>
 </body>
 </html>

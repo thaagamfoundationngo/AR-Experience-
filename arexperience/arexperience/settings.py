@@ -50,7 +50,7 @@ PREVIEWS_DIR = MEDIA_ROOT / "previews"
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DATA_UPLOAD_MAX_MEMORY_SIZE = 524288000  # 500MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 524288000
-BASE_URL = "https://0919d7fa9eb0.ngrok-free.app"
+BASE_URL = "https://scoring-contents-russia-justify.trycloudflare.com"
 # settings.py
 #MINDAR_CLI = r"C:\Users\pc\AppData\Roaming\npm\mindar-image.cmd"
 
@@ -126,7 +126,7 @@ STATICFILES_DIRS = [os.path.join(BASE_DIR, "static"),]
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 DEBUG = True
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", ".ngrok-free.app",]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", ".ngrok-free.app","ears-lauren-jade-prison.trycloudflare.com","scoring-contents-russia-justify.trycloudflare.com"]
 
 CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
