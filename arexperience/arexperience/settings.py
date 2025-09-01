@@ -43,11 +43,11 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "arexperience.urls"
 # settings.py
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
-PREVIEWS_DIR = MEDIA_ROOT / "previews"
+# MEDIA_URL = "/media/"
+# MEDIA_ROOT = BASE_DIR / "media"
+# PREVIEWS_DIR = MEDIA_ROOT / "previews"
 
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DATA_UPLOAD_MAX_MEMORY_SIZE = 524288000  # 500MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 524288000
 BASE_URL = "https://scoring-contents-russia-justify.trycloudflare.com"
@@ -65,6 +65,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "django.template.context_processors.media",
             ],
         },
     },
@@ -117,16 +118,26 @@ USE_I18N = True
 USE_TZ = True
 
 
+# ✅ STATIC FILES (Your AR.js libraries)
+STATIC_URL = "static/"
+STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
+STATIC_ROOT = BASE_DIR / "staticfiles"  # For production
+
+# ✅ MEDIA FILES (User uploads and NFT markers) - USE ONLY ONE METHOD
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"  # Modern pathlib method
+PREVIEWS_DIR = MEDIA_ROOT / "previews"
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = "static/"
-STATICFILES_DIRS = [os.path.join(BASE_DIR, "static"),]
+# STATIC_URL = "static/"
+# STATICFILES_DIRS = [os.path.join(BASE_DIR, "static"),]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 DEBUG = True
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", ".ngrok-free.app","ears-lauren-jade-prison.trycloudflare.com","scoring-contents-russia-justify.trycloudflare.com"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", ".ngrok-free.app","natural-lean-sc-talks.trycloudflare.com"]
 
 CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",

@@ -387,10 +387,10 @@
             {% for exp in experiences %}
                 {% if exp.slug == new_experience_slug %}
                     <div class="btn-group">
-                        <a href="{% url 'ar_experience' exp.id %}" class="btn btn-primary">
+                        <a href="{% url 'experience_view' exp.slug %}" class="btn btn-primary">
                             🎯 Launch AR Experience
                         </a>
-                        <a href="{% url 'experience_view' exp.slug %}" class="btn btn-secondary">
+                        <a href="{% url 'ar_experience' exp.id %}" class="btn btn-secondary">
                             📱 View Details
                         </a>
                     </div>
@@ -443,11 +443,11 @@
                       <img src="{{ experience.qr_code.url }}" alt="QR Code" class="qr-code">
                     {% endif %}
                     <div class="btn-group-vertical">
-                      <a href="{% url 'ar_experience' experience.id %}" class="btn btn-primary btn-sm mb-1">
+                      <a href="{% url 'experience_view' experience.slug %}" class="btn btn-primary btn-sm mb-1">
                         🎯 Launch AR
                       </a>
-                      <a href="{% url 'experience_view' experience.slug %}" class="btn btn-outline-secondary btn-sm">
-                        📱 Details
+                      <a href="{% url 'ar_experience' experience.id %}" class="btn btn-outline-secondary btn-sm">
+                        📱 View Details
                       </a>
                     </div>
                   </div>

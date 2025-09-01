@@ -3,7 +3,7 @@ from django.http import JsonResponse
 from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
-from django.contrib.staticfiles import finders
+from django.core.files import File
 import os
 import qrcode
 from io import BytesIO
@@ -23,82 +23,49 @@ import json
 logger = logging.getLogger(__name__)
 
 def optimize_image_for_markers(image_path: str, max_size: tuple = (512, 512), quality: int = 85) -> str:
-    """
-    Optimize image for better marker generation performance.
-    Returns path to optimized image.
-    """
+    """Use original uploaded image as-is for NFT marker generation."""
     try:
         img_path = Path(image_path)
-        optimized_path = img_path.parent / f"optimized_{img_path.name}"
         
-        with Image.open(img_path) as img:
-            # Convert to RGB if needed
-            if img.mode in ('RGBA', 'P'):
-                # Create white background
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P':
-                    img = img.convert('RGBA')
-                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                img = background
-            
-            # Resize if too large
-            if img.size[0] > max_size[0] or img.size[1] > max_size[1]:
-                img.thumbnail(max_size, Image.Resampling.LANCZOS)
-                logger.info(f"Resized image from original to {img.size}")
-            
-            # Enhance contrast for better marker detection
-            enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.2)
-            
-            # Save optimized image
-            img.save(optimized_path, 'JPEG', quality=quality, optimize=True)
-            logger.info(f"Optimized image saved: {optimized_path}")
-            
-        return str(optimized_path)
+        if not img_path.exists():
+            logger.error(f"Image file not found: {img_path}")
+            return str(img_path)
+        
+        logger.info(f"Using original image for NFT marker generation: {img_path.name}")
+        return str(img_path)
         
     except Exception as e:
-        logger.error(f"Image optimization failed: {e}")
-        return image_path  # Return original if optimization fails
+        logger.error(f"Error in optimize_image_for_markers: {e}")
+        return image_path
 
 def check_node_environment() -> tuple[bool, str]:
-    """
-    Check if Node.js environment is properly set up.
-    Returns (success, message)
-    """
+    """Check if Node.js environment is properly set up."""
     try:
-        # Check Node.js
         node_cmd = "node.exe" if os.name == "nt" else "node"
-        result = subprocess.run([node_cmd, "--version"], capture_output=True, text=True, timeout=10)
+        result = subprocess.run([node_cmd, "--version"], capture_output=True, text=True, timeout=None)
         if result.returncode != 0:
             return False, "Node.js not found or not working"
         
         node_version = result.stdout.strip()
         logger.info(f"Node.js version: {node_version}")
         
-        # Check if NFT marker creator is installed
         pkg_root = Path(settings.BASE_DIR) / "node_modules" / "@webarkit" / "nft-marker-creator-app"
         script = pkg_root / "src" / "NFTMarkerCreator.js"
         
         if not script.exists():
             return False, f"NFTMarkerCreator.js not found at {script}"
         
-        # Check package.json
         package_json = pkg_root / "package.json"
         if not package_json.exists():
             return False, "Package configuration not found"
         
         return True, f"Environment OK - Node.js {node_version}"
         
-    except subprocess.TimeoutExpired:
-        return False, "Node.js check timed out"
     except Exception as e:
         return False, f"Environment check failed: {e}"
 
 def ensure_named(file_path: str, expected_name: str) -> str:
-    """
-    Ensures a file has the expected name. If not, renames it.
-    Returns the path to the correctly named file.
-    """
+    """Ensures a file has the expected name. If not, renames it."""
     file_path = Path(file_path)
     expected_path = file_path.parent / expected_name
     
@@ -113,60 +80,55 @@ def ensure_named(file_path: str, expected_name: str) -> str:
     
     return str(file_path)
 
-def train_arjs_marker(image_path: str, out_dir: str, slug: str, timeout: int = 120) -> bool:
+def train_arjs_marker(image_path: str, out_dir: str, slug: str) -> tuple[bool, dict]:
     """
-    Enhanced AR.js marker training with better error handling and logging.
+    Enhanced AR.js marker training WITHOUT timeout constraints.
+    Returns (success, file_paths) where file_paths contains paths to generated files.
     """
     try:
-        # Environment check
         env_ok, env_msg = check_node_environment()
         if not env_ok:
             logger.error(f"Environment check failed: {env_msg}")
-            return False
+            return False, {}
         
-        logger.info(f"Starting marker generation for {slug} with timeout {timeout}s")
+        logger.info(f"Starting marker generation for {slug} WITHOUT timeout")
         
-        # Optimize image first
         optimized_image = optimize_image_for_markers(image_path)
         
         img = Path(optimized_image).resolve()
         out = Path(out_dir).resolve()
         out.mkdir(parents=True, exist_ok=True)
 
-        # Package locations
         pkg_root = Path(settings.BASE_DIR) / "node_modules" / "@webarkit" / "nft-marker-creator-app"
         script = pkg_root / "src" / "NFTMarkerCreator.js"
         script_dir = script.parent
 
-        # Create unique temporary image name to avoid conflicts
         timestamp = int(time.time())
         temp_img = script_dir / f"temp_{slug}_{timestamp}_{img.name}"
         
+        generated_files = {}
+        
         try:
-            # Copy image to script directory
             shutil.copy2(img, temp_img)
             logger.info(f"Copied image to: {temp_img}")
             
-            # Clean up optimized image if it's different from original
             if optimized_image != image_path:
                 try:
                     os.remove(optimized_image)
                 except:
                     pass
             
-            # Prepare command
             node = "node.exe" if os.name == "nt" else "node"
             cmd = [node, str(script), "-i", temp_img.name]
             
-            # Environment setup
             env = os.environ.copy()
             env.setdefault("PYTHONUTF8", "1")
-            env.setdefault("NODE_OPTIONS", "--max-old-space-size=2048")  # Increase memory
+            env.setdefault("NODE_OPTIONS", "--max-old-space-size=4096")
             
             logger.info(f"Running command: {' '.join(cmd)}")
             start_time = time.time()
             
-            # Execute with extended timeout
+            # Execute WITHOUT timeout
             proc = subprocess.run(
                 cmd,
                 cwd=str(script_dir),
@@ -174,13 +136,12 @@ def train_arjs_marker(image_path: str, out_dir: str, slug: str, timeout: int = 1
                 text=True,
                 encoding="utf-8",
                 env=env,
-                timeout=timeout,
+                timeout=None,  # NO TIMEOUT
             )
             
             execution_time = time.time() - start_time
             logger.info(f"Command completed in {execution_time:.2f} seconds")
             
-            # Log outputs (truncated for readability)
             if proc.stdout:
                 logger.info(f"stdout: {proc.stdout[:500]}...")
             if proc.stderr:
@@ -188,22 +149,19 @@ def train_arjs_marker(image_path: str, out_dir: str, slug: str, timeout: int = 1
             
             if proc.returncode != 0:
                 logger.error(f"Node process failed with code {proc.returncode}")
-                return False
+                return False, {}
             
-            # Check for output files
             gen_dir = script_dir / "output"
             if not gen_dir.exists():
                 logger.error(f"Output directory not found: {gen_dir}")
-                return False
+                return False, {}
             
-            # Find generated files
             produced = {".iset": None, ".fset": None, ".fset3": None}
             for p in gen_dir.glob("*"):
                 if p.suffix in produced and produced[p.suffix] is None:
                     produced[p.suffix] = p
                     logger.info(f"Found generated file: {p}")
             
-            # Copy files to destination
             copied_files = []
             for ext in [".iset", ".fset", ".fset3"]:
                 src = produced.get(ext)
@@ -215,12 +173,12 @@ def train_arjs_marker(image_path: str, out_dir: str, slug: str, timeout: int = 1
                 try:
                     shutil.copy2(src, dest)
                     copied_files.append(str(dest))
+                    generated_files[ext] = str(dest)
                     logger.info(f"Copied {src} -> {dest} ({dest.stat().st_size} bytes)")
                 except Exception as e:
                     logger.error(f"Copy error: {src} -> {dest}, {e}")
-                    return False
+                    return False, {}
             
-            # Clean up generated files
             try:
                 for file in gen_dir.glob("*"):
                     file.unlink()
@@ -228,11 +186,10 @@ def train_arjs_marker(image_path: str, out_dir: str, slug: str, timeout: int = 1
             except Exception as e:
                 logger.warning(f"Cleanup warning: {e}")
             
-            success = len(copied_files) >= 3  # Need all three files
-            return success
+            success = len(copied_files) >= 3
+            return success, generated_files
             
         finally:
-            # Always clean up temporary image
             if temp_img.exists():
                 try:
                     temp_img.unlink()
@@ -240,50 +197,71 @@ def train_arjs_marker(image_path: str, out_dir: str, slug: str, timeout: int = 1
                 except Exception as e:
                     logger.warning(f"Temp cleanup warning: {e}")
     
-    except subprocess.TimeoutExpired:
-        logger.error(f"Process timed out after {timeout} seconds")
-        # Try once more with longer timeout if first attempt timed out
-        if timeout < 180:
-            logger.info("Retrying with extended timeout...")
-            return train_arjs_marker(image_path, out_dir, slug, timeout=180)
-        return False
     except Exception as e:
         logger.error(f"Exception in train_arjs_marker: {e}")
-        return False
+        return False, {}
 
-def build_pattern_marker(image_path: str, slug: str, media_root: str, marker_size_m=1.0):
+def build_pattern_marker(image_path, slug, media_root):
     """
-    Generate AR.js NFT marker files (.iset/.fset/.fset3) into:
-      MEDIA_ROOT/markers/<slug>/<slug>.(iset|fset|fset3)
-    Returns True on success, False otherwise.
+    Build pattern marker WITHOUT timeout constraints and return file paths.
+    Returns tuple (success, file_paths) for database storage.
     """
     try:
         img = Path(image_path)
-        out_dir = Path(media_root) / "markers" / slug  # <— subfolder per slug
+        out_dir = Path(media_root) / "markers" / slug
         out_dir.mkdir(parents=True, exist_ok=True)
 
         if not img.exists():
             logger.error(f"[marker] Image file not found: {img}")
-            return False
+            return False, {}
 
         try:
-            subprocess.run(["node", "--version"], capture_output=True, check=True)
+            subprocess.run(["node", "--version"], capture_output=True, check=True, timeout=None)
         except (subprocess.SubprocessError, FileNotFoundError):
             logger.error("[marker] Node.js is not installed or not in PATH")
-            return False
+            return False, {}
 
-        logger.info(f"[marker] Generating AR.js NFT markers for slug: {slug}")
-        success = train_arjs_marker(str(img), str(out_dir), slug)  # train_arjs_marker will copy as <slug>.*
+        logger.info(f"[marker] Starting NFT marker generation for slug: {slug} WITHOUT timeout")
+        logger.info(f"[marker] Image: {img} ({img.stat().st_size} bytes)")
+        logger.info(f"[marker] Output directory: {out_dir}")
+        
+        success, file_paths = train_arjs_marker(str(img), str(out_dir), slug)
 
         if success:
             logger.info(f"[marker] Successfully generated NFT markers for {slug}")
-            return True
+            return True, file_paths
         else:
             logger.warning(f"[marker] Failed to generate NFT markers for {slug}")
-            return False
+            return False, {}
 
     except Exception as e:
         logger.error(f"[marker] Error in build_pattern_marker: {str(e)}")
+        return False, {}
+
+def save_nft_files_to_database(experience: ARExperience, file_paths: dict):
+    """Save generated NFT files to database fields (hidden from frontend)."""
+    try:
+        for ext, file_path in file_paths.items():
+            if not file_path or not Path(file_path).exists():
+                continue
+                
+            with open(file_path, 'rb') as f:
+                file_content = File(f)
+                filename = f"{experience.slug}{ext}"
+                
+                if ext == ".iset":
+                    experience.nft_iset_file.save(filename, file_content, save=False)
+                elif ext == ".fset":
+                    experience.nft_fset_file.save(filename, file_content, save=False)
+                elif ext == ".fset3":
+                    experience.nft_fset3_file.save(filename, file_content, save=False)
+        
+        experience.save(update_fields=['nft_iset_file', 'nft_fset_file', 'nft_fset3_file'])
+        logger.info(f"NFT files saved to database for {experience.slug}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error saving NFT files to database: {e}")
         return False
 
 def home(request):
@@ -300,7 +278,12 @@ def debug_markers(request, slug):
         'slug': slug,
         'marker_dir': str(marker_dir),
         'marker_dir_exists': marker_dir.exists(),
-        'files': {}
+        'files': {},
+        'nft_db_status': {
+            'iset': bool(experience.nft_iset_file),
+            'fset': bool(experience.nft_fset_file),
+            'fset3': bool(experience.nft_fset3_file),
+        }
     }
 
     required_files = [f"{slug}.iset", f"{slug}.fset", f"{slug}.fset3"]
@@ -315,7 +298,6 @@ def debug_markers(request, slug):
             if filepath.exists():
                 try:
                     with open(filepath, 'rb') as f:
-                        # NFT files are binary; avoid dumping contents
                         info['content_preview'] = 'Binary OK'
                 except:
                     info['content_preview'] = 'Binary file or read error'
@@ -324,7 +306,7 @@ def debug_markers(request, slug):
     return JsonResponse(debug_info, indent=2)
 
 def upload_view(request):
-    """Enhanced upload view with improved marker generation handling"""
+    """Enhanced upload view with NFT file database storage and no timeouts"""
     if request.method == 'POST':
         form = ARExperienceForm(request.POST, request.FILES)
 
@@ -333,7 +315,6 @@ def upload_view(request):
                 with transaction.atomic():
                     experience = form.save(commit=False)
                     
-                    # Ensure slug is generated
                     if not experience.slug:
                         base_slug = slugify(experience.title) or f"exp-{uuid.uuid4().hex[:8]}"
                         counter = 1
@@ -345,24 +326,29 @@ def upload_view(request):
                     
                     experience.save()
 
-                # Enhanced Pattern Marker Generation
                 marker_message = "No image provided"
                 try:
                     if experience.image:
-                        logger.info(f"Starting enhanced marker generation for {experience.slug}")
-                        patt_path = build_pattern_marker(
+                        logger.info(f"Starting marker generation for {experience.slug} WITHOUT timeout")
+                        
+                        success, nft_file_paths = build_pattern_marker(
                             image_path=experience.image.path,
                             slug=experience.slug,
-                            media_root=settings.MEDIA_ROOT,
-                            marker_size_m=float(form.cleaned_data.get("marker_size", 1.0))
+                            media_root=settings.MEDIA_ROOT
                         )
                         
-                        if patt_path:
-                            logger.info(f"Enhanced marker generation successful for {experience.slug}")
+                        if success and nft_file_paths:
+                            logger.info(f"Marker generation successful for {experience.slug}")
+                            
+                            db_save_success = save_nft_files_to_database(experience, nft_file_paths)
+                            
                             experience.marker_generated = True
-                            marker_message = "Markers generated successfully"
+                            marker_message = "Markers generated and saved successfully"
+                            
+                            if not db_save_success:
+                                marker_message += " (Warning: Database save partially failed)"
                         else:
-                            logger.warning(f"Enhanced marker generation failed for {experience.slug}")
+                            logger.warning(f"Marker generation failed for {experience.slug}")
                             experience.marker_generated = False
                             marker_message = "Marker generation failed"
                     else:
@@ -377,7 +363,7 @@ def upload_view(request):
                     experience.save(update_fields=["marker_generated"])
                     marker_message = f"Generation error: {pattern_error}"
 
-                # QR Code Generation with better error handling
+                # QR Code Generation
                 try:
                     qr_url = request.build_absolute_uri(experience.get_absolute_url())
                     qr_code_dir = os.path.join(settings.MEDIA_ROOT, 'qrcodes')
@@ -400,7 +386,6 @@ def upload_view(request):
                     logger.error(f"QR generation failed: {qr_error}")
                     messages.error(request, f"QR code generation failed: {qr_error}")
 
-                # Success message with marker status
                 if experience.marker_generated:
                     messages.success(request, f'AR Experience created successfully! {marker_message}')
                 else:
@@ -418,7 +403,6 @@ def upload_view(request):
                 logger.error(f"  {field}: {errors}")
             messages.error(request, 'Please correct the errors below.')
 
-    # GET request or form errors
     form = ARExperienceForm() if request.method == 'GET' else form
     
     context = {
@@ -430,22 +414,17 @@ def upload_view(request):
     
     return render(request, 'upload.html', context)
 
-# ===== ENHANCED EXPERIENCE VIEW WITH WEBCAM ACTIVATION =====
-
 def experience_view(request, slug):
     """Enhanced experience view with webcam activation capabilities"""
     experience = get_object_or_404(ARExperience, slug=slug)
     
-    # Build the base URL for media files
     base_url = getattr(settings, 'BASE_URL', request.build_absolute_uri('/')[:-1])
     media_url = getattr(settings, 'MEDIA_URL', '/media/')
     if not media_url.startswith('http'):
         media_url = base_url + media_url
     
-    # Path to marker files (without file extensions) - should be in MEDIA_ROOT
     marker_base_url = f"{media_url}markers/{slug}/{slug}"
     
-    # Check if marker files exist in MEDIA_ROOT
     marker_files_exist = False
     try:
         marker_dir = Path(settings.MEDIA_ROOT) / "markers" / slug
@@ -456,16 +435,15 @@ def experience_view(request, slug):
         
         if not marker_files_exist:
             logger.warning(f"⚠️ Some marker files missing for {slug}, regenerating...")
-            # Try to regenerate marker files
-            success = build_pattern_marker(
+            success, nft_file_paths = build_pattern_marker(
                 image_path=experience.image.path,
                 slug=experience.slug,
                 media_root=settings.MEDIA_ROOT
             )
             
             if success:
+                save_nft_files_to_database(experience, nft_file_paths)
                 logger.info(f"✅ Successfully regenerated marker files for {slug}")
-                # Recheck after regeneration
                 marker_files_exist = all(
                     (marker_dir / file).exists() for file in required_files
                 )
@@ -477,12 +455,11 @@ def experience_view(request, slug):
         logger.error(f"❌ Error checking marker files for {slug}: {e}")
         marker_files_exist = False
     
-    # ===== WEBCAM ACTIVATION CONFIGURATION =====
     webcam_config = {
         'enabled': True,
         'source_type': 'webcam',
-        'device_id': None,  # Auto-select camera
-        'facing_mode': 'environment',  # Rear camera preferred
+        'device_id': None,
+        'facing_mode': 'environment',
         'resolution': {
             'width': 640,
             'height': 480
@@ -495,7 +472,6 @@ def experience_view(request, slug):
         'fallback_message': 'Camera access is required for AR experience'
     }
     
-    # Feature detection settings
     feature_detection_config = {
         'tracking_method': 'best',
         'detection_mode': 'mono',
@@ -510,7 +486,6 @@ def experience_view(request, slug):
         }
     }
     
-    # AR overlay settings
     ar_overlay_config = {
         'video_opacity': 0.95,
         'video_scale': {
@@ -525,7 +500,6 @@ def experience_view(request, slug):
         'preload': 'metadata'
     }
     
-    # Browser compatibility check
     browser_requirements = {
         'webrtc_support': True,
         'webgl_support': True,
@@ -541,7 +515,6 @@ def experience_view(request, slug):
     }
     
     context = {
-        # Original context
         "experience": experience,
         "marker_base_url": marker_base_url,
         "marker_files_exist": marker_files_exist,
@@ -551,14 +524,12 @@ def experience_view(request, slug):
         "marker_image_url": experience.image.url if experience.image else None,
         "timestamp": int(time.time()),
         
-        # ===== WEBCAM ACTIVATION CONTEXT =====
         "webcam_enabled": True,
         "webcam_config": json.dumps(webcam_config),
         "feature_detection_config": json.dumps(feature_detection_config),
         "ar_overlay_config": json.dumps(ar_overlay_config),
         "browser_requirements": json.dumps(browser_requirements),
         
-        # UI Configuration
         "ui_config": json.dumps({
             'show_debug_info': settings.DEBUG,
             'show_fps_counter': True,
@@ -567,7 +538,6 @@ def experience_view(request, slug):
             'enable_manual_controls': True
         }),
         
-        # Instructions for users
         "instructions": {
             'setup': 'Allow camera access when prompted by your browser',
             'usage': 'Point your camera at the uploaded marker image',
@@ -577,19 +547,15 @@ def experience_view(request, slug):
         }
     }
     
-    # Log webcam activation
     logger.info(f"🎥 Webcam AR experience loaded for {slug} (Markers: {'✅' if marker_files_exist else '❌'})")
     
     return render(request, "experience.html", context)
 
-# ===== WEBCAM-SPECIFIC VIEWS =====
+# Keep all other existing functions with their original names...
 
 def webcam_ar_experience_view(request, slug=None):
-    """
-    Dedicated webcam AR experience view with full activation capabilities
-    """
+    """Dedicated webcam AR experience view with full activation capabilities"""
     
-    # Get experience by slug or latest available
     if slug:
         experience = get_object_or_404(ARExperience, slug=slug)
     else:
@@ -602,45 +568,40 @@ def webcam_ar_experience_view(request, slug=None):
             logger.warning("No AR experiences available")
             experience = None
     
-    # Build base URLs for media files
     base_url = getattr(settings, 'BASE_URL', request.build_absolute_uri('/')[:-1])
     media_url = getattr(settings, 'MEDIA_URL', '/media/')
     if not media_url.startswith('http'):
         media_url = base_url + media_url
     
-    # Initialize default values
     marker_base_url = ""
     marker_files_exist = False
     
     if experience:
-        # Path to NFT marker descriptor files (without extensions)
         marker_base_url = f"{media_url}markers/{experience.slug}/{experience.slug}"
         
-        # Check if marker files exist for feature matching
         try:
             marker_dir = Path(settings.MEDIA_ROOT) / "markers" / experience.slug
             required_files = [
-                f"{experience.slug}.iset",  # Image set for NFT tracking
-                f"{experience.slug}.fset",  # Feature set descriptors
-                f"{experience.slug}.fset3"  # Extended feature descriptors
+                f"{experience.slug}.iset",
+                f"{experience.slug}.fset",
+                f"{experience.slug}.fset3"
             ]
             
             marker_files_exist = all(
                 (marker_dir / file).exists() for file in required_files
             )
             
-            # Auto-regenerate marker files if missing
             if not marker_files_exist:
                 logger.info(f"🔄 Regenerating marker files for {experience.slug}")
                 try:
-                    success = build_pattern_marker(
+                    success, nft_file_paths = build_pattern_marker(
                         image_path=experience.image.path,
                         slug=experience.slug,
                         media_root=settings.MEDIA_ROOT
                     )
                     
                     if success:
-                        # Verify files were created
+                        save_nft_files_to_database(experience, nft_file_paths)
                         marker_files_exist = all(
                             (marker_dir / file).exists() for file in required_files
                         )
@@ -654,7 +615,6 @@ def webcam_ar_experience_view(request, slug=None):
         except Exception as e:
             logger.error(f"❌ Error checking marker files for {experience.slug}: {e}")
     
-    # Comprehensive webcam configuration
     webcam_config = {
         'enabled': True,
         'auto_activate': True,
@@ -676,7 +636,6 @@ def webcam_ar_experience_view(request, slug=None):
         'debug_mode': settings.DEBUG
     }
     
-    # AR processing configuration
     ar_processing_config = {
         'tracking_method': 'best',
         'source_type': 'webcam',
@@ -690,7 +649,6 @@ def webcam_ar_experience_view(request, slug=None):
         'label_size': '0.5em'
     }
     
-    # Feature matching configuration  
     feature_config = {
         'detection_threshold': 0.7,
         'tracking_stability': 5,
@@ -700,7 +658,6 @@ def webcam_ar_experience_view(request, slug=None):
         'confidence_threshold': 0.6
     }
     
-    # Video overlay configuration
     video_config = {
         'opacity': 0.95,
         'scale': {'width': 1.6, 'height': 0.9},
@@ -716,29 +673,24 @@ def webcam_ar_experience_view(request, slug=None):
     }
     
     context = {
-        # Core experience data
         "experience": experience,
         "title": experience.title if experience else "AR Experience",
         "description": experience.description if experience else "Webcam AR Experience",
         
-        # Marker and video data
         "marker_base_url": marker_base_url,
         "marker_files_exist": marker_files_exist,
         "marker_image_url": experience.image.url if experience and experience.image else None,
         "video_url": experience.video.url if experience and experience.video else None,
         
-        # Webcam activation configs (JSON serialized for frontend)
         "webcam_config": json.dumps(webcam_config),
         "ar_processing_config": json.dumps(ar_processing_config),
         "feature_config": json.dumps(feature_config),
         "video_config": json.dumps(video_config),
         
-        # Technical parameters
         "base_url": base_url,
         "timestamp": int(time.time()),
         "debug_mode": settings.DEBUG,
         
-        # Browser compatibility
         "browser_requirements": json.dumps({
             "webrtc_support": True,
             "webgl_support": True,
@@ -747,7 +699,6 @@ def webcam_ar_experience_view(request, slug=None):
             "modern_browser_required": True
         }),
         
-        # User instructions
         "user_instructions": {
             "camera_setup": "Allow camera access when prompted",
             "marker_usage": "Point camera at the uploaded image",
@@ -757,20 +708,16 @@ def webcam_ar_experience_view(request, slug=None):
         }
     }
     
-    # Log webcam AR activation
     if experience:
         logger.info(f"🎥📱 Webcam AR activated: {experience.title} (Markers: {'✅' if marker_files_exist else '❌'})")
     
     return render(request, "webcam_ar.html", context)
 
 def ar_status_api(request, slug):
-    """
-    API endpoint to check AR experience status and webcam readiness
-    """
+    """API endpoint to check AR experience status and webcam readiness"""
     try:
         experience = get_object_or_404(ARExperience, slug=slug)
         
-        # Check marker files
         marker_dir = Path(settings.MEDIA_ROOT) / "markers" / experience.slug
         required_files = [f"{experience.slug}.iset", f"{experience.slug}.fset", f"{experience.slug}.fset3"]
         marker_files_exist = all((marker_dir / file).exists() for file in required_files)
@@ -792,6 +739,11 @@ def ar_status_api(request, slug):
                 "video_available": bool(experience.video),
                 "image_url": experience.image.url if experience.image else None,
                 "video_url": experience.video.url if experience.video else None
+            },
+            "nft_database": {
+                "iset_stored": bool(experience.nft_iset_file),
+                "fset_stored": bool(experience.nft_fset_file),
+                "fset3_stored": bool(experience.nft_fset3_file),
             },
             "webcam": {
                 "required": True,
@@ -818,14 +770,11 @@ def ar_status_api(request, slug):
             "timestamp": int(time.time())
         }, status=500)
 
-# ===== EXISTING FUNCTIONS (UNCHANGED) =====
-
 def ar_experience_by_slug(request, slug):
     """AR experience viewer accessible by slug"""
     try:
         experience = ARExperience.objects.get(slug=slug)
 
-        # Prepare context with full URLs
         context = {
             'experience': experience,
             'video_url': experience.video.url if experience.video else None,
@@ -834,7 +783,7 @@ def ar_experience_by_slug(request, slug):
             'description': experience.description,
             'slug': experience.slug,
             'base_url': settings.BASE_URL,
-            'webcam_enabled': True,  # Enable webcam for this view
+            'webcam_enabled': True,
         }
 
         return render(request, 'ar_viewer.html', context)
@@ -848,29 +797,38 @@ def ar_experience_by_slug(request, slug):
         return redirect('upload')
 
 def regenerate_markers(request, slug):
-    """Enhanced marker regeneration with better feedback"""
+    """Enhanced marker regeneration WITHOUT timeout and with database storage"""
     if request.method == 'POST':
         experience = get_object_or_404(ARExperience, slug=slug)
 
         try:
-            logger.info(f"Regenerating markers for {slug}")
-            patt_path = build_pattern_marker(
+            logger.info(f"Starting marker regeneration for {slug} WITHOUT timeout")
+            logger.info(f"Processing image: {experience.image.path}")
+            logger.info(f"Image size: {experience.image.size} bytes")
+            
+            success, nft_file_paths = build_pattern_marker(
                 image_path=experience.image.path,
                 slug=experience.slug,
                 media_root=settings.MEDIA_ROOT
             )
 
-            # Update the marker_generated field
-            success = patt_path is not None
-            experience.marker_generated = success
-            experience.save(update_fields=['marker_generated'])
-
-            if success:
+            if success and nft_file_paths:
+                db_save_success = save_nft_files_to_database(experience, nft_file_paths)
+                
+                experience.marker_generated = True
+                experience.save(update_fields=['marker_generated'])
+                
+                logger.info(f"Marker regeneration completed for {slug}: Success")
+                
                 return JsonResponse({
                     'status': 'success', 
-                    'message': f'Markers regenerated successfully for {slug}'
+                    'message': f'Markers regenerated and saved successfully for {slug}',
+                    'database_saved': db_save_success
                 })
             else:
+                experience.marker_generated = False
+                experience.save(update_fields=['marker_generated'])
+                
                 return JsonResponse({
                     'status': 'error', 
                     'message': f'Failed to regenerate markers for {slug}'
@@ -885,7 +843,6 @@ def regenerate_markers(request, slug):
 def qr_view(request, slug):
     experience = get_object_or_404(ARExperience, slug=slug)
     
-    # Generate QR code
     base_url = getattr(settings, 'BASE_URL', 'http://127.0.0.1:8000')
     experience_url = f"{base_url}/x/{slug}/"
     
@@ -904,7 +861,7 @@ def qr_view(request, slug):
         'experience': experience,
         'qr_data': qr_data,
         'experience_url': experience_url,
-        'webcam_enabled': True,  # Enable webcam for QR view
+        'webcam_enabled': True,
     })
 
 def marker_status_api(request, slug):
@@ -931,18 +888,20 @@ def marker_status_api(request, slug):
             'files_exist': all_exist,
             'files': files_status,
             'can_regenerate': bool(experience.image),
-            'webcam_ready': all_exist  # Webcam ready status
+            'webcam_ready': all_exist,
+            'nft_database_status': {
+                'iset_stored': bool(experience.nft_iset_file),
+                'fset_stored': bool(experience.nft_fset_file),
+                'fset3_stored': bool(experience.nft_fset3_file),
+            }
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
 def webcam_ar_debug_view(request, slug):
-    """
-    Debug view for webcam AR experience development and troubleshooting
-    """
+    """Debug view for webcam AR experience development and troubleshooting"""
     experience = get_object_or_404(ARExperience, slug=slug)
     
-    # Detailed marker file analysis
     marker_dir = Path(settings.MEDIA_ROOT) / "markers" / experience.slug
     marker_analysis = {}
     
@@ -966,14 +925,32 @@ def webcam_ar_debug_view(request, slug):
             'enabled': True,
             'debug_ui': True,
             'show_stats': True
+        },
+        "nft_database_info": {
+            'iset_file': str(experience.nft_iset_file) if experience.nft_iset_file else None,
+            'fset_file': str(experience.nft_fset_file) if experience.nft_fset_file else None,
+            'fset3_file': str(experience.nft_fset3_file) if experience.nft_fset3_file else None,
         }
     }
     
     return render(request, "webcam_ar_debug.html", debug_context)
 
-# ===== COMPATIBILITY FUNCTIONS =====
-
 def ar_experience_view(request, experience_id: int):
     """Back-compat: resolve by ID then reuse the slug-based view with webcam."""
     exp = get_object_or_404(ARExperience, id=experience_id)
-    return experience_view(request, exp.slug)  # Use enhanced experience_view with webcam
+    return experience_view(request, exp.slug)
+
+def realtime_experience_view(request, slug):
+    """Real-time AR experience that doesn't require NFT marker generation"""
+    experience = get_object_or_404(ARExperience, slug=slug)
+    
+    context = {
+        "experience": experience,
+        "title": experience.title,
+        "video_url": experience.video.url if experience.video else None,
+        "realtime_mode": True,
+        "timestamp": int(time.time()),
+    }
+    
+    logger.info(f"🎯 Real-time AR experience loaded: {experience.title}")
+    return render(request, "realtime_experience.html", context)
