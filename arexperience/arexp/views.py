@@ -241,29 +241,65 @@ def build_pattern_marker(image_path, slug, media_root):
 def save_nft_files_to_database(experience: ARExperience, file_paths: dict):
     """Save generated NFT files to database fields (hidden from frontend)."""
     try:
-        for ext, file_path in file_paths.items():
-            if not file_path or not Path(file_path).exists():
-                continue
-                
-            with open(file_path, 'rb') as f:
-                file_content = File(f)
-                filename = f"{experience.slug}{ext}"
-                
-                if ext == ".iset":
-                    experience.nft_iset_file.save(filename, file_content, save=False)
-                elif ext == ".fset":
-                    experience.nft_fset_file.save(filename, file_content, save=False)
-                elif ext == ".fset3":
-                    experience.nft_fset3_file.save(filename, file_content, save=False)
+        # Use the model's update_nft_files method instead of direct field assignment
+        iset_path = file_paths.get('.iset')
+        fset_path = file_paths.get('.fset')
+        fset3_path = file_paths.get('.fset3')
         
-        experience.save(update_fields=['nft_iset_file', 'nft_fset_file', 'nft_fset3_file'])
-        logger.info(f"NFT files saved to database for {experience.slug}")
-        return True
+        success = experience.update_nft_files(iset_path, fset_path, fset3_path)
+        
+        if success:
+            logger.info(f"NFT files saved to database for {experience.slug}")
+            return True
+        else:
+            logger.error(f"Failed to save NFT files to database for {experience.slug}")
+            return False
         
     except Exception as e:
         logger.error(f"Error saving NFT files to database: {e}")
-        return False
+        return False    
 
+
+def update_nft_files(self, iset_path=None, fset_path=None, fset3_path=None):
+    """Update NFT file paths in database safely"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    update_fields = []
+    
+    # Convert to string for comparison
+    current_iset = str(self.nft_iset_file) if self.nft_iset_file else None
+    current_fset = str(self.nft_fset_file) if self.nft_fset_file else None
+    current_fset3 = str(self.nft_fset3_file) if self.nft_fset3_file else None
+    
+    # Update iset file
+    if iset_path is not None and current_iset != iset_path:
+        self.nft_iset_file = iset_path
+        update_fields.append('nft_iset_file')
+    
+    # Update fset file
+    if fset_path is not None and current_fset != fset_path:
+        self.nft_fset_file = fset_path
+        update_fields.append('nft_fset_file')
+    
+    # Update fset3 file
+    if fset3_path is not None and current_fset3 != fset3_path:
+        self.nft_fset3_file = fset3_path
+        update_fields.append('nft_fset3_file')
+    
+    if update_fields:
+        try:
+            self.save(update_fields=update_fields)
+            return True
+        except Exception as e:
+            logger.error(f"Error updating NFT files: {e}")
+            return False
+    
+    return True  # No changes needed
+
+
+
+   
 def home(request):
     return render(request, "home.html")
 

@@ -22,7 +22,7 @@ urlpatterns = [
     path('debug_markers/<slug:slug>/', views.debug_markers, name='debug_markers'),
     path('regenerate_markers/<slug:slug>/', views.regenerate_markers, name='regenerate_markers'),
     path('marker_status/<slug:slug>/', views.marker_status_api, name='marker_status_api'),
-    
+    #path('debug/nft/<str:slug>/', views. debug_nft_files, name='debug_nft_files'),
    
     path('rt/<slug:slug>/', views.realtime_experience_view, name='realtime_experience'),
 

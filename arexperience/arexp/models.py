@@ -1,12 +1,10 @@
-# models.py - Corrected version with NFT file storage
-
+# models.py - Cleaned and updated version
 import os
 import uuid
 from django.db import models
 from django.utils.text import slugify
 from django.core.validators import FileExtensionValidator
 from django.conf import settings
-
 
 def validate_and_truncate_filename(instance, filename):
     """Truncate long filenames and ensure they're safe"""
@@ -26,7 +24,6 @@ def validate_and_truncate_filename(instance, filename):
     
     return f"{safe_name}{ext}"
 
-
 def _delete_file(path):
     """Safely delete a file"""
     try:
@@ -37,55 +34,46 @@ def _delete_file(path):
         logger = logging.getLogger(__name__)
         logger.warning(f"Could not delete file {path}: {e}")
 
-
-# Upload path functions - these replace the lambda functions
+# Upload path functions
 def upload_image_path(instance, filename):
     """Generate upload path for Upload model images"""
     clean_filename = validate_and_truncate_filename(instance, filename)
     return f"images/{clean_filename}"
-
 
 def upload_video_path(instance, filename):
     """Generate upload path for Upload model videos"""
     clean_filename = validate_and_truncate_filename(instance, filename)
     return f"videos/{clean_filename}"
 
-
 def upload_mind_file_path(instance, filename):
     """Generate upload path for Upload model mind files"""
     clean_filename = validate_and_truncate_filename(instance, filename)
     return f"targets/{clean_filename}"
-
 
 def ar_marker_image_path(instance, filename):
     """Generate upload path for AR Experience marker images"""
     clean_filename = validate_and_truncate_filename(instance, filename)
     return f"markers/{clean_filename}"
 
-
 def ar_video_path(instance, filename):
     """Generate upload path for AR Experience videos"""
     clean_filename = validate_and_truncate_filename(instance, filename)
     return f"videos/{clean_filename}"
-
 
 def ar_model_path(instance, filename):
     """Generate upload path for AR Experience 3D models"""
     clean_filename = validate_and_truncate_filename(instance, filename)
     return f"models/{clean_filename}"
 
-
 def ar_qr_path(instance, filename):
     """Generate upload path for AR Experience QR codes"""
     clean_filename = validate_and_truncate_filename(instance, filename)
     return f"qrcodes/{clean_filename}"
 
-
 def ar_nft_path(instance, filename):
-    """Generate upload path for NFT marker files (hidden from frontend)"""
+    """Generate upload path for NFT marker files"""
     clean_filename = validate_and_truncate_filename(instance, filename)
     return f"nft_markers/{clean_filename}"
-
 
 class Upload(models.Model):
     """Upload model with proper filename handling"""
@@ -94,7 +82,6 @@ class Upload(models.Model):
         help_text="8th Wall Image Target name", 
         db_index=True
     )
-
     image = models.ImageField(
         upload_to=upload_image_path,
         blank=False, 
@@ -107,48 +94,46 @@ class Upload(models.Model):
         blank=False, 
         null=False
     )
-
     mind_file = models.FileField(
         upload_to=upload_mind_file_path, 
         blank=True, 
         null=True
     )
-
     slug = models.SlugField(max_length=100, unique=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
+    
     class Meta:
         ordering = ["-uploaded_at"]
-
+    
     def image_url(self):
         return self.image.url if self.image else ""
-
+    
     def video_url(self):
         return self.video.url if self.video else ""
-
+    
     def __str__(self):
         return f"Upload {self.id} | {self.target_name} | {self.slug}"
-
+    
     def get_absolute_url(self):
         from django.urls import reverse
         return reverse("experience_slug", args=[self.slug])
-
+    
     def get_qr_url(self):
         from django.urls import reverse
         return reverse("qr_slug", args=[self.slug])
-
+    
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = self.generate_unique_slug()
         super().save(*args, **kwargs)
-
+    
     @staticmethod
     def generate_unique_slug():
         while True:
             s = uuid.uuid4().hex[:8]
             if not Upload.objects.filter(slug=s).exists():
                 return s
-
+    
     def delete(self, *args, **kwargs):
         img_path = self.image.path if self.image else None
         vid_path = self.video.path if self.video else None
@@ -158,15 +143,14 @@ class Upload(models.Model):
         _delete_file(vid_path)
         _delete_file(mind_path)
 
-
 class ARExperience(models.Model):
-    """AR Experience model with NFT file storage and proper file handling"""
+    """AR Experience model with NFT file storage"""
     
     title = models.CharField(max_length=200, help_text="Name of the AR experience")
     slug = models.SlugField(max_length=50, unique=True, blank=True)
     description = models.TextField(blank=True, help_text="Description of the AR experience")
     
-    # Main files visible in frontend
+    # Main files
     image = models.ImageField(
         upload_to=ar_marker_image_path,
         help_text="Image to be used as AR marker"
@@ -188,29 +172,26 @@ class ARExperience(models.Model):
         help_text="Optional 3D model file"
     )
     
-    # NFT Marker Files - stored in database but HIDDEN from frontend
+    # NFT Marker Files
     nft_iset_file = models.FileField(
         upload_to=ar_nft_path, 
         blank=True, 
         null=True, 
-        editable=False,  # Hidden from admin and forms
-        help_text="NFT marker .iset file (automatically generated)"
+        editable=False
     )
     
     nft_fset_file = models.FileField(
         upload_to=ar_nft_path, 
         blank=True, 
         null=True, 
-        editable=False,  # Hidden from admin and forms
-        help_text="NFT marker .fset file (automatically generated)"
+        editable=False
     )
     
     nft_fset3_file = models.FileField(
         upload_to=ar_nft_path, 
         blank=True, 
         null=True, 
-        editable=False,  # Hidden from admin and forms
-        help_text="NFT marker .fset3 file (automatically generated)"
+        editable=False
     )
     
     # Other fields
@@ -229,7 +210,7 @@ class ARExperience(models.Model):
     )
     
     marker_generated = models.BooleanField(default=False, help_text="Whether marker files have been generated")
-
+    
     class Meta:
         ordering = ['-created_at']
         verbose_name = "AR Experience"
@@ -239,16 +220,25 @@ class ARExperience(models.Model):
         return self.title
     
     def save(self, *args, **kwargs):
-        # Generate slug if not set - FIXED: use self.title instead of self.name
+        # Generate slug if not set
         if not self.slug:
             self.slug = slugify(self.title) if self.title else f"exp-{uuid.uuid4().hex[:8]}"
-            # Ensure uniqueness - FIXED: use ARExperience instead of Experience
+            # Ensure uniqueness
             count = 1
             original_slug = self.slug
             while ARExperience.objects.filter(slug=self.slug).exists():
                 self.slug = f"{original_slug}-{count}"
                 count += 1
+        
+        # Check if this is a new object
+        is_new = self._state.adding
+        
+        # Call parent save
         super().save(*args, **kwargs)
+        
+        # If new object, refresh from DB to get the ID
+        if is_new:
+            self.refresh_from_db()
     
     @property
     def marker_files_exist(self):
@@ -286,36 +276,83 @@ class ARExperience(models.Model):
     
     def clean_nft_files(self):
         """Clean up NFT files from database and filesystem"""
-        nft_files = [self.nft_iset_file, self.nft_fset_file, self.nft_fset3_file]
-        for nft_file in nft_files:
-            if nft_file:
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Delete physical files
+        for field_name in ['nft_iset_file', 'nft_fset_file', 'nft_fset3_file']:
+            field = getattr(self, field_name)
+            if field:
                 try:
-                    _delete_file(nft_file.path)
-                except:
-                    pass
+                    _delete_file(field.path)
+                except Exception as e:
+                    logger.warning(f"Could not delete {field_name}: {e}")
         
         # Clear database references
-        self.nft_iset_file = None
-        self.nft_fset_file = None  
-        self.nft_fset3_file = None
-        self.save(update_fields=['nft_iset_file', 'nft_fset_file', 'nft_fset3_file'])
+        update_fields = []
+        for field_name in ['nft_iset_file', 'nft_fset_file', 'nft_fset3_file']:
+            if getattr(self, field_name) is not None:
+                setattr(self, field_name, None)
+                update_fields.append(field_name)
+        
+        # Only save if there are changes
+        if update_fields:
+            try:
+                self.save(update_fields=update_fields)
+            except Exception as e:
+                logger.error(f"Error in clean_nft_files: {e}")
+    
+    def update_nft_files(self, iset_path=None, fset_path=None, fset3_path=None):
+        """Update NFT file paths in database safely"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        update_fields = []
+        
+        # Update iset file
+        if iset_path is not None and self.nft_iset_file != iset_path:
+            self.nft_iset_file = iset_path
+            update_fields.append('nft_iset_file')
+        
+        # Update fset file
+        if fset_path is not None and self.nft_fset_file != fset_path:
+            self.nft_fset_file = fset_path
+            update_fields.append('nft_fset_file')
+        
+        # Update fset3 file
+        if fset3_path is not None and self.nft_fset3_file != fset3_path:
+            self.nft_fset3_file = fset3_path
+            update_fields.append('nft_fset3_file')
+        
+        # Only save if there are changes
+        if update_fields:
+            try:
+                self.save(update_fields=update_fields)
+                return True
+            except Exception as e:
+                logger.error(f"Error updating NFT files: {e}")
+                return False
+        
+        return True  # No changes needed
     
     def delete(self, *args, **kwargs):
         """Clean up all files when deleting"""
+        # Collect all file paths
+        file_paths = []
+        
         # Main files
-        img_path = self.image.path if self.image else None
-        vid_path = self.video.path if self.video else None
-        model_path = self.model_file.path if self.model_file else None
-        qr_path = self.qr_code.path if self.qr_code else None
+        for field in [self.image, self.video, self.model_file, self.qr_code]:
+            if field:
+                file_paths.append(field.path)
         
         # NFT files
-        nft_iset_path = self.nft_iset_file.path if self.nft_iset_file else None
-        nft_fset_path = self.nft_fset_file.path if self.nft_fset_file else None
-        nft_fset3_path = self.nft_fset3_file.path if self.nft_fset3_file else None
+        for field in [self.nft_iset_file, self.nft_fset_file, self.nft_fset3_file]:
+            if field:
+                file_paths.append(field.path)
         
+        # Delete from database
         super().delete(*args, **kwargs)
         
-        # Clean up all files
-        for path in [img_path, vid_path, model_path, qr_path, nft_iset_path, nft_fset_path, nft_fset3_path]:
-            if path:
-                _delete_file(path)
+        # Delete physical files
+        for path in file_paths:
+            _delete_file(path)

@@ -10,33 +10,124 @@
     <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar-nft.min.js"></script>
     
     <style>
-        body { margin: 0; font-family: Arial, sans-serif; overflow: hidden; }
-        #arjs-video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif; 
+            overflow: hidden; 
+            background: #000;
+        }
         
         #start-ar {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: #00ff00; color: black; padding: 20px 40px;
-            border: none; border-radius: 10px; font-size: 18px; font-weight: bold;
-            cursor: pointer; z-index: 1000;
+            position: fixed; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%);
+            background: linear-gradient(45deg, #00ff00, #00cc00); 
+            color: black; 
+            padding: 20px 40px;
+            border: none; 
+            border-radius: 15px; 
+            font-size: 18px; 
+            font-weight: bold;
+            cursor: pointer; 
+            z-index: 1000;
+            box-shadow: 0 4px 15px rgba(0,255,0,0.3);
         }
         
         #status {
-            position: fixed; top: 20px; left: 20px;
-            background: rgba(0,0,0,0.8); color: white; padding: 15px;
-            border-radius: 10px; font-size: 14px; z-index: 999;
+            position: fixed; 
+            top: 20px; 
+            left: 20px;
+            background: rgba(0,0,0,0.9); 
+            color: white; 
+            padding: 15px;
+            border-radius: 10px; 
+            font-size: 14px; 
+            z-index: 999;
+            border: 1px solid #333;
+        }
+        
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-ready { background: #00ff00; }
+        .status-active { background: #ffaa00; }
+        .status-error { background: #ff0000; }
+        
+        #debug-panel {
+            position: fixed; 
+            bottom: 20px; 
+            right: 20px;
+            background: rgba(0,0,0,0.8); 
+            color: #00ff00; 
+            padding: 10px;
+            border-radius: 8px; 
+            font-size: 12px; 
+            z-index: 999;
+            display: none;
+        }
+        
+        #marker-preview {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            border: 2px solid #00ff00;
+            border-radius: 10px;
+            z-index: 998;
+            display: none;
+            object-fit: contain;
+        }
+        
+        #play-button {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 255, 0, 0.8);
+            color: black;
+            border: none;
+            border-radius: 10px;
+            padding: 15px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 999;
+            display: none;
         }
     </style>
 </head>
 <body>
-    <!-- Start Button for User Interaction -->
+    <!-- Start Button -->
     <button id="start-ar">🎯 Start AR Experience</button>
     
     <!-- Status Display -->
     <div id="status">
-        <div>📹 Camera: <span id="camera-status">Ready</span></div>
-        <div>🎯 Tracking: <span id="tracking-status">Waiting</span></div>
-        <div>🎬 Video: <span id="video-status">Ready</span></div>
+        <div>📹 Camera: <span class="status-dot status-ready"></span><span id="camera-status">Ready</span></div>
+        <div>🎯 Tracking: <span class="status-dot status-ready"></span><span id="tracking-status">Waiting</span></div>
+        <div>🎬 Video: <span class="status-dot status-ready"></span><span id="video-status">Ready</span></div>
+        <div>⚡ Session: <span class="status-dot status-active"></span><span id="session-status">Active</span></div>
     </div>
+    
+    <!-- Debug Panel (Double-click to show) -->
+    <div id="debug-panel">
+        <div>Marker Files: <span id="marker-status">Checking...</span></div>
+        <div>Video Ready: <span id="video-ready">No</span></div>
+        <button onclick="window.testMarkerFiles()">Test Files</button>
+        <button onclick="window.forceVideoPlay()">Force Video</button>
+    </div>
+    
+    <!-- Play Button (shown when video needs user interaction) -->
+    <button id="play-button">▶️ Play Video</button>
+    
+    <!-- Marker Preview -->
+    <img id="marker-preview" src="{{ marker_image_url }}" alt="Marker Preview">
     
     <!-- AR Scene -->
     <a-scene
@@ -44,14 +135,14 @@
         vr-mode-ui="enabled: false"
         renderer="antialias: true; alpha: true;"
         embedded
-        arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: true;"
+        arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: true; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
         style="display: none;">
         
         <a-assets>
             {% if experience.video %}
             <video 
                 id="ar-video" 
-                src="{{ experience.video.url }}" 
+                src="{{ video_url }}" 
                 loop 
                 muted 
                 playsinline 
@@ -62,8 +153,7 @@
             {% endif %}
         </a-assets>
         
-        {% if marker_files_exist %}
-        <!-- ✅ CRITICAL FIX: Add videohandler attribute -->
+        <!-- Always render the NFT marker for debugging -->
         <a-nft
             id="nft-marker"
             videohandler
@@ -71,11 +161,11 @@
             url="{{ marker_base_url }}"
             smooth="true" 
             smoothCount="10" 
-            smoothTolerance="0.01" 
-            smoothThreshold="5">
+            smoothTolerance="0.05" 
+            smoothThreshold="5"
+            emitevents="true">
             
             {% if experience.video %}
-            <!-- ✅ CRITICAL FIX: Proper video scale and position -->
             <a-video 
                 id="video-overlay"
                 src="#ar-video" 
@@ -88,134 +178,444 @@
             </a-video>
             {% endif %}
         </a-nft>
-        {% endif %}
         
         <a-entity camera></a-entity>
     </a-scene>
+
+<script>
+// ====================================
+// GLOBAL VARIABLES
+// ====================================
+let userInteracted = false;
+let arActive = false;
+let markerDetected = false;
+let videoNeedsUserGesture = false;
+const elements = {};
+// ====================================
+// IMMEDIATE INITIALIZATION
+// ====================================
+document.addEventListener('DOMContentLoaded', function() {
+    elements.arScene = document.getElementById('ar-scene');
+    elements.video = document.getElementById('ar-video');
+    elements.overlay = document.getElementById('video-overlay');
+    elements.startBtn = document.getElementById('start-ar');
+    elements.markerPreview = document.getElementById('marker-preview');
+    elements.debugPanel = document.getElementById('debug-panel');
+    elements.playButton = document.getElementById('play-button');
     
-    <script>
-        let userInteracted = false;
-        let arScene, marker, video, overlay;
+    initEventHandlers();
+    checkMarkerFiles();
+    
+    // Enable debug panel on double-click
+    document.addEventListener('dblclick', function() {
+        elements.debugPanel.style.display = 
+            elements.debugPanel.style.display === 'none' ? 'block' : 'none';
+    });
+});
+// ====================================
+// EVENT HANDLERS
+// ====================================
+function initEventHandlers() {
+    elements.startBtn.addEventListener('click', function() {
+        userInteracted = true;
+        this.style.display = 'none';
+        elements.arScene.style.display = 'block';
+        elements.markerPreview.style.display = 'block';
+        arActive = true;
         
-        // ✅ CRITICAL FIX: Proper event handling
-        function initAR() {
-            arScene = document.getElementById('ar-scene');
-            marker = document.getElementById('nft-marker');
-            video = document.getElementById('ar-video');
-            overlay = document.getElementById('video-overlay');
-            
-            console.log('🚀 AR initialized');
-            document.getElementById('camera-status').textContent = 'Active';
-            
-            if (marker) {
-                // ✅ CRITICAL FIX: Proper marker event listeners
-                marker.addEventListener('markerFound', function() {
-                    console.log('🎯 MARKER FOUND!');
-                    document.getElementById('tracking-status').textContent = 'FOUND!';
-                    
-                    if (overlay) {
-                        overlay.setAttribute('visible', 'true');
-                        overlay.setAttribute('opacity', '0.95');
-                    }
-                    
-                    if (video && userInteracted) {
-                        video.play().then(() => {
-                            console.log('✅ Video playing');
-                            document.getElementById('video-status').textContent = 'Playing';
-                        }).catch(error => {
-                            console.log('❌ Video blocked:', error);
-                            document.getElementById('video-status').textContent = 'Blocked - tap screen';
-                        });
-                    }
-                });
-                
-                marker.addEventListener('markerLost', function() {
-                    console.log('❌ Marker lost');
-                    document.getElementById('tracking-status').textContent = 'Searching...';
-                    
-                    if (overlay) {
-                        overlay.setAttribute('visible', 'false');
-                    }
-                    
-                    if (video && !video.paused) {
-                        video.pause();
-                        document.getElementById('video-status').textContent = 'Paused';
-                    }
-                });
-            }
-            
-            // ✅ CRITICAL FIX: Debug NFT file loading
-            const markerUrl = "{{ marker_base_url }}";
-            console.log('🔍 Testing NFT files at:', markerUrl);
-            
-            ['.fset', '.iset', '.fset3'].forEach(ext => {
-                fetch(markerUrl + ext)
-                    .then(r => console.log(`✅ ${ext}: ${r.status}`))
-                    .catch(e => console.log(`❌ ${ext}: ${e.message}`));
-            });
+        initAR();
+    });
+    
+    // Add global click handler for video playback
+    document.addEventListener('click', function() {
+        if (arActive && elements.video && elements.video.paused && userInteracted) {
+            playVideo();
         }
-        
-        // ✅ CRITICAL FIX: User interaction handler
-        document.getElementById('start-ar').addEventListener('click', function() {
-            userInteracted = true;
-            this.style.display = 'none';
-            document.getElementById('ar-scene').style.display = 'block';
-            
-            // Enable video play for the session
-            if (video) {
-                video.muted = true; // Required for autoplay
-            }
-            
-            setTimeout(initAR, 1000);
-        });
-        
-        // ✅ CRITICAL FIX: Global click handler for video
-        document.addEventListener('click', function() {
-            if (video && video.paused && userInteracted) {
-                video.play().catch(console.warn);
-            }
-        });
-        
-        // ✅ Debug functions
-        window.testMarkerFiles = function() {
-            const baseUrl = "{{ marker_base_url }}";
-            console.log('Testing marker files at:', baseUrl);
-            
-            ['.fset', '.iset', '.fset3'].forEach(ext => {
-                fetch(baseUrl + ext)
-                    .then(response => {
-                        if (response.ok) {
-                            console.log(`✅ ${ext}: Found (${response.status})`);
-                        } else {
-                            console.log(`❌ ${ext}: Missing (${response.status})`);
-                        }
-                    })
-                    .catch(error => {
-                        console.log(`❌ ${ext}: Error - ${error.message}`);
+    });
+    
+    // Add touch handler for mobile
+    document.addEventListener('touchstart', function() {
+        if (arActive && elements.video && elements.video.paused && userInteracted) {
+            playVideo();
+        }
+    });
+    
+    // Play button handler
+    elements.playButton.addEventListener('click', function() {
+        playVideo();
+        this.style.display = 'none';
+    });
+}
+// ====================================
+// AR INITIALIZATION
+// ====================================
+function initAR() {
+    console.log('🚀 AR initializing');
+    updateStatus('camera-status', 'Initializing', 'status-active');
+    
+    // Check if AR.js is loaded
+    if (typeof ARjs === 'undefined') {
+        console.error('❌ AR.js not loaded');
+        updateStatus('session-status', 'AR.js Error', 'status-error');
+        return;
+    }
+    
+    // Initialize camera
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function(stream) {
+                console.log('✅ Camera access granted');
+                updateStatus('camera-status', 'Active', 'status-active');
+                
+                // Stop the stream to avoid using camera until AR starts
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Initialize video
+                if (elements.video) {
+                    // Set video properties for autoplay
+                    elements.video.muted = true;
+                    elements.video.playsInline = true;
+                    elements.video.setAttribute('webkit-playsinline', 'true');
+                    elements.video.setAttribute('playsinline', 'true');
+                    
+                    // Add event listeners
+                    elements.video.addEventListener('loadeddata', function() {
+                        updateStatus('video-status', 'Loaded', 'status-ready');
+                        document.getElementById('video-ready').textContent = 'Yes';
+                        console.log('✅ Video loaded and ready');
                     });
+                    
+                    elements.video.addEventListener('canplay', function() {
+                        updateStatus('video-status', 'Playable', 'status-active');
+                        console.log('✅ Video can play');
+                    });
+                    
+                    elements.video.addEventListener('error', function(e) {
+                        console.error('Video error:', e);
+                        updateStatus('video-status', 'Error', 'status-error');
+                    });
+                    
+                    // Force video load
+                    elements.video.load();
+                }
+                
+                // Initialize AR tracking
+                initARTracking();
+            })
+            .catch(function(err) {
+                console.error('❌ Camera access error:', err);
+                updateStatus('camera-status', 'Error: ' + err.name, 'status-error');
+                updateStatus('session-status', 'Camera Error', 'status-error');
             });
-        };
-        
-        window.forceVideoPlay = function() {
-            if (video) {
-                video.play().then(() => {
-                    console.log('✅ Video force-played');
-                    if (overlay) {
-                        overlay.setAttribute('visible', 'true');
-                        overlay.setAttribute('opacity', '0.95');
+    } else {
+        console.warn('⚠️ Camera API not available');
+        updateStatus('camera-status', 'Not Available', 'status-error');
+    }
+}
+// ====================================
+// AR TRACKING INITIALIZATION
+// ====================================
+function initARTracking() {
+    console.log('🎯 Initializing AR tracking');
+    
+    // Check if AR scene is available
+    if (!elements.arScene) {
+        console.error('❌ AR scene not available');
+        return;
+    }
+    
+    // Wait for AR.js to be ready
+    if (elements.arScene.systems && elements.arScene.systems.arjs) {
+        const arSystem = elements.arScene.systems.arjs;
+        if (arSystem.arToolkitContext) {
+            // Configure tracking parameters for better detection
+            arSystem.arToolkitContext.parameters.detectionMode = 'mono_and_matrix';
+            arSystem.arToolkitContext.parameters.matrixCodeType = '3x3';
+            arSystem.arToolkitContext.parameters.canvasWidth = 640;
+            arSystem.arToolkitContext.parameters.canvasHeight = 480;
+            arSystem.arToolkitContext.parameters.maxDetectionRate = 30;
+            
+            console.log('✅ AR tracking parameters configured');
+            updateStatus('tracking-status', 'Initialized', 'status-active');
+        }
+    }
+    
+    // Set up manual marker detection check
+    setInterval(checkMarkerDetection, 100);
+}
+// ====================================
+// MANUAL MARKER DETECTION CHECK
+// ====================================
+function checkMarkerDetection() {
+    if (!arActive) return;
+    
+    // Check if NFT marker is detected
+    const nftMarker = document.getElementById('nft-marker');
+    if (nftMarker && nftMarker.object3D.visible) {
+        if (!markerDetected) {
+            markerDetected = true;
+            console.log('🎯 NFT MARKER DETECTED MANUALLY!');
+            updateStatus('tracking-status', 'MARKER FOUND!', 'status-active');
+            
+            // Hide marker preview
+            elements.markerPreview.style.display = 'none';
+            
+            // Show overlay immediately
+            if (elements.overlay) {
+                elements.overlay.setAttribute('visible', 'true');
+                elements.overlay.setAttribute('opacity', '0.95');
+            }
+            
+            // Try to play video
+            if (elements.video && userInteracted) {
+                playVideo();
+            } else if (!userInteracted) {
+                console.log('⚠️ Waiting for user interaction');
+                updateStatus('video-status', 'Tap to play', 'status-error');
+                elements.playButton.style.display = 'block';
+            }
+        }
+    } else {
+        if (markerDetected) {
+            markerDetected = false;
+            console.log('❌ MARKER LOST MANUALLY!');
+            updateStatus('tracking-status', 'Searching...', 'status-ready');
+            
+            // Show marker preview again
+            elements.markerPreview.style.display = 'block';
+            
+            if (elements.overlay) {
+                elements.overlay.setAttribute('visible', 'false');
+            }
+            
+            if (elements.video && !elements.video.paused) {
+                elements.video.pause();
+                elements.video.currentTime = 0;
+                updateStatus('video-status', 'Paused', 'status-ready');
+            }
+            
+            // Hide play button
+            elements.playButton.style.display = 'none';
+        }
+    }
+}
+// ====================================
+// VIDEO PLAYBACK
+// ====================================
+function playVideo() {
+    if (!elements.video) {
+        console.error('❌ Video element not found');
+        return;
+    }
+    
+    console.log('🎬 Attempting to play video');
+    
+    // Ensure video properties are set
+    elements.video.muted = true;
+    elements.video.playsInline = true;
+    elements.video.setAttribute('webkit-playsinline', 'true');
+    elements.video.setAttribute('playsinline', 'true');
+    
+    console.log('Video state:', {
+        readyState: elements.video.readyState,
+        paused: elements.video.paused,
+        muted: elements.video.muted,
+        duration: elements.video.duration,
+        currentTime: elements.video.currentTime
+    });
+    
+    // Check if video is ready
+    if (elements.video.readyState < 2) {
+        console.log('⚠️ Video not ready, waiting for loadeddata event');
+        elements.video.addEventListener('loadeddata', function() {
+            console.log('✅ Video now ready, attempting to play');
+            attemptVideoPlay();
+        }, { once: true });
+    } else {
+        attemptVideoPlay();
+    }
+}
+
+function attemptVideoPlay() {
+    // Create a play promise
+    const playPromise = elements.video.play();
+    
+    if (playPromise !== undefined) {
+        playPromise.then(() => {
+            console.log('✅ Video playing successfully!');
+            updateStatus('video-status', 'Playing', 'status-active');
+            elements.playButton.style.display = 'none';
+        }).catch(error => {
+            console.error('❌ Video play failed:', error);
+            updateStatus('video-status', 'Needs interaction', 'status-error');
+            
+            // Show play button for user interaction
+            elements.playButton.style.display = 'block';
+            
+            // Mobile retry mechanism
+            if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                console.log('📱 Mobile detected, preparing retry mechanism');
+                document.addEventListener('touchstart', function mobileRetry() {
+                    elements.video.play().then(() => {
+                        console.log('✅ Video playing after mobile touch');
+                        updateStatus('video-status', 'Playing (Touch)', 'status-active');
+                        elements.playButton.style.display = 'none';
+                    }).catch(console.warn);
+                    document.removeEventListener('touchstart', mobileRetry);
+                }, { once: true });
+            }
+        });
+    } else {
+        // For older browsers that don't return a promise
+        elements.video.play();
+        console.log('✅ Video play initiated (no promise returned)');
+        updateStatus('video-status', 'Playing', 'status-active');
+        elements.playButton.style.display = 'none';
+    }
+}
+// ====================================
+// MARKER FILE VERIFICATION
+// ====================================
+function checkMarkerFiles() {
+    const markerUrl = "{{ marker_base_url }}";
+    const extensions = ['.fset', '.iset', '.fset3'];
+    let checkedCount = 0;
+    let validFiles = 0;
+    
+    extensions.forEach(ext => {
+        fetch(markerUrl + ext, {method: 'HEAD'})
+            .then(response => {
+                checkedCount++;
+                if (response.ok) validFiles++;
+                const status = response.ok ? '✅' : '❌';
+                console.log(`${status} ${ext}: ${response.status}`);
+                
+                if (checkedCount === extensions.length) {
+                    const statusText = validFiles === 3 ? 'Ready' : `${validFiles}/3 Found`;
+                    document.getElementById('marker-status').textContent = statusText;
+                    
+                    if (validFiles < 3) {
+                        console.warn('⚠️ Some marker files are missing, NFT detection may not work');
+                        updateStatus('tracking-status', 'Marker Error', 'status-error');
                     }
-                }).catch(error => {
-                    console.log('❌ Video force-play failed:', error);
-                });
-            }
-        };
+                }
+            })
+            .catch(error => {
+                checkedCount++;
+                console.error(`❌ ${ext}:`, error.message);
+                
+                if (checkedCount === extensions.length) {
+                    document.getElementById('marker-status').textContent = `Error: ${validFiles}/3`;
+                    updateStatus('tracking-status', 'Marker Error', 'status-error');
+                }
+            });
+    });
+}
+// ====================================
+// UTILITY FUNCTIONS
+// ====================================
+function updateStatus(elementId, text, statusClass) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.textContent = text;
+        const dot = element.parentElement.querySelector('.status-dot');
+        if (dot) {
+            dot.className = `status-dot ${statusClass}`;
+        }
+    }
+}
+// ====================================
+// DEBUG FUNCTIONS (GLOBAL)
+// ====================================
+window.testMarkerFiles = function() {
+    checkMarkerFiles();
+};
+window.forceVideoPlay = function() {
+    if (elements.video) {
+        console.log('🔧 Force playing video...');
+        playVideo();
         
-        // Auto-test marker files after 3 seconds
-        setTimeout(() => {
-            if (typeof testMarkerFiles === 'function') {
-                testMarkerFiles();
+        if (elements.overlay) {
+            elements.overlay.setAttribute('visible', 'true');
+        }
+    }
+};
+</script>
+<script>
+// ====================================
+// AFRAME VIDEO HANDLER COMPONENT
+// ====================================
+AFRAME.registerComponent('videohandler', {
+    init: function () {
+        const marker = this.el;
+        const video = document.querySelector("#ar-video");
+        const videoOverlay = document.querySelector("#video-overlay");
+        
+        console.log('🎬 Video handler initialized');
+        
+        marker.addEventListener('markerFound', function () {
+            console.log('🎯 NFT MARKER DETECTED!');
+            updateStatus('tracking-status', 'MARKER FOUND!', 'status-active');
+            
+            // Hide marker preview
+            document.getElementById('marker-preview').style.display = 'none';
+            
+            // Show overlay immediately
+            if (videoOverlay) {
+                videoOverlay.setAttribute('visible', 'true');
+                videoOverlay.setAttribute('opacity', '0.95');
             }
-        }, 3000);
-    </script>
+            
+            // Try to play video
+            if (video && userInteracted) {
+                if (video.readyState >= 2) {
+                    playVideo();
+                } else {
+                    video.addEventListener('loadeddata', function() {
+                        playVideo();
+                    }, { once: true });
+                }
+            } else if (!userInteracted) {
+                console.log('⚠️ Waiting for user interaction');
+                updateStatus('video-status', 'Tap to play', 'status-error');
+                document.getElementById('play-button').style.display = 'block';
+            }
+        });
+        
+        marker.addEventListener('markerLost', function() {
+            console.log('❌ NFT Marker lost');
+            updateStatus('tracking-status', 'Searching...', 'status-ready');
+            
+            // Show marker preview again
+            document.getElementById('marker-preview').style.display = 'block';
+            
+            if (videoOverlay) {
+                videoOverlay.setAttribute('visible', 'false');
+            }
+            
+            if (video && !video.paused) {
+                video.pause();
+                video.currentTime = 0;
+                updateStatus('video-status', 'Paused', 'status-ready');
+            }
+            
+            // Hide play button
+            document.getElementById('play-button').style.display = 'none';
+        });
+        
+        // Add a marker event listener for initialization
+        marker.addEventListener('markerStarted', function() {
+            console.log('🎯 Marker tracking started');
+            updateStatus('tracking-status', 'Tracking Active', 'status-active');
+        });
+        
+        // Add error event listener
+        marker.addEventListener('markerError', function(event) {
+            console.error('Marker error:', event);
+            updateStatus('tracking-status', 'Error', 'status-error');
+        });
+    }
+});
+</script>
 </body>
 </html>
