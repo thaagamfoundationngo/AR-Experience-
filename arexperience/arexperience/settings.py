@@ -1,25 +1,25 @@
-
 from pathlib import Path
 import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
+# ==============================================================================
+# SECURITY SETTINGS
+# ==============================================================================
 SECRET_KEY = "django-insecure-hfrhzp0c872fe@&22sa^2sjw0lxjsgh86-rikmj4^npcu08h59"
-
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost", 
+    ".ngrok-free.app",
+    "angry-arabic-deleted-supplied.trycloudflare.com"
+]
 
-
-# Application definition
-
+# ==============================================================================
+# APPLICATIONS
+# ==============================================================================
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -27,11 +27,15 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "arexp", 
-    #"arexp.apps.ArexpConfig",# Custom app for AR Experience
+    "corsheaders",  # For CORS handling
+    "arexp",        # Your AR Experience app
 ]
 
+# ==============================================================================
+# MIDDLEWARE
+# ==============================================================================
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -39,50 +43,17 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    # "your_app.middleware.CORSMiddleware",  # Add this first
-    # "django.middleware.security.SecurityMiddleware",
 ]
 
 ROOT_URLCONF = "arexperience.urls"
-# settings.py
-# MEDIA_URL = "/media/"
-# MEDIA_ROOT = BASE_DIR / "media"
-# PREVIEWS_DIR = MEDIA_ROOT / "previews"
 
-# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-DATA_UPLOAD_MAX_MEMORY_SIZE = 524288000  # 500MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = 524288000
-BASE_URL = "https://scoring-contents-russia-justify.trycloudflare.com"
-# settings.py
-#MINDAR_CLI = r"C:\Users\pc\AppData\Roaming\npm\mindar-image.cmd"
-# Add CORS headers for NFT marker files
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
-CORS_ALLOWED_ORIGINS = [
-    "http://127.0.0.1:8000",
-    "https://your-domain.com",
-    ".ngrok-free.app",
-    "yacht-equal-arch-cameron.trycloudflare.com"
-    # Add your production domain
-]
-
-# Allow specific headers for AR.js
-CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-    'range',  # Important for video files
-]
-
+# ==============================================================================
+# TEMPLATES
+# ==============================================================================
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -98,12 +69,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "arexperience.wsgi.application"
 
-
-
-
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
+# ==============================================================================
+# DATABASE
+# ==============================================================================
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -111,10 +79,9 @@ DATABASES = {
     }
 }
 
-
-# Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
-
+# ==============================================================================
+# PASSWORD VALIDATION
+# ==============================================================================
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -130,50 +97,85 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
-# Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
-
+# ==============================================================================
+# INTERNATIONALIZATION
+# ==============================================================================
 LANGUAGE_CODE = "en-us"
-
 TIME_ZONE = "Asia/Kolkata"
-
 USE_I18N = True
-
 USE_TZ = True
 
-
-# ✅ STATIC FILES (Your AR.js libraries)
+# ==============================================================================
+# STATIC FILES CONFIGURATION
+# ==============================================================================
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
-STATIC_ROOT = BASE_DIR / "staticfiles"  # For production
+STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# ✅ MEDIA FILES (User uploads and NFT markers) - USE ONLY ONE METHOD
+# ==============================================================================
+# MEDIA FILES CONFIGURATION
+# ==============================================================================
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media' # Modern pathlib method
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Custom media directories
 PREVIEWS_DIR = MEDIA_ROOT / 'previews'
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
+# ==============================================================================
+# FILE UPLOAD SETTINGS
+# ==============================================================================
+DATA_UPLOAD_MAX_MEMORY_SIZE = 524288000  # 500MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 524288000   # 500MB
 
-# STATIC_URL = "static/"
-# STATICFILES_DIRS = [os.path.join(BASE_DIR, "static"),]
+# ==============================================================================
+# CORS CONFIGURATION (for MindAR)
+# ==============================================================================
+CORS_ALLOW_ALL_ORIGINS = True  # For development only
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
-DEBUG = True
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", ".ngrok-free.app","beliefs-jones-steering-ar.trycloudflare.com"]
+CORS_ALLOWED_ORIGINS = [
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+    "https://angry-arabic-deleted-supplied.trycloudflare.com",
+]
 
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'range',  # Important for video files
+]
+
+# ==============================================================================
+# CSRF CONFIGURATION
+# ==============================================================================
 CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://localhost:8000",
-    "https://*.ngrok-free.app",
-    "http://localhost",
-    "http://127.0.0.1",
+    "https://angry-arabic-deleted-supplied.trycloudflare.com",
 ]
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-# Ensure cookies can be set on HTTP during dev
-CSRF_COOKIE_SECURE = False
-SESSION_COOKIE_SECURE = False
 
+CSRF_COOKIE_SECURE = False      # Set to True in production with HTTPS
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_USE_SESSIONS = False
+
+# ==============================================================================
+# SESSION CONFIGURATION
+# ==============================================================================
+SESSION_COOKIE_SECURE = False   # Set to True in production with HTTPS
+
+# ==============================================================================
+# SECURITY CONFIGURATION
+# ==============================================================================
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# ==============================================================================
+# DEFAULT SETTINGS
+# ==============================================================================
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

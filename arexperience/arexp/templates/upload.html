@@ -276,7 +276,7 @@
     <div class="upload-box">
       <h1 class="page-title">🎯 Create AR Experience</h1>
       <p class="page-subtitle">Upload images and videos to create immersive augmented reality experiences</p>
-
+      
       <!-- Messages -->
       {% if messages %}
         {% for message in messages %}
@@ -286,11 +286,10 @@
         {% endfor %}
       {% endif %}
 
-
       <!-- Upload Form -->
       <form id="uploadForm" method="post" action="{% url 'upload_view' %}" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
-
+        
         <!-- Title Field -->
         <div class="mb-4">
           <label for="{{ form.title.id_for_label }}" class="form-label">
@@ -302,7 +301,7 @@
           {% endif %}
           <div class="form-text">Give your AR experience a memorable and descriptive name</div>
         </div>
-
+        
         <!-- Description Field -->
         <div class="mb-4">
           <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
@@ -312,7 +311,7 @@
           {% endif %}
           <div class="form-text">Describe what users will experience (optional)</div>
         </div>
-
+        
         <!-- Marker Image Upload -->
         <div class="mb-4">
           <label for="{{ form.image.id_for_label }}" class="form-label">
@@ -330,7 +329,7 @@
           <div id="imgPreview" class="preview"></div>
           <div class="form-text">Use high-contrast images with clear patterns for better tracking</div>
         </div>
-
+        
         <!-- Video Upload -->
         <div class="mb-4">
           <label for="{{ form.video.id_for_label }}" class="form-label">
@@ -348,7 +347,7 @@
           <div id="videoPreview" class="preview"></div>
           <div class="form-text">Shorter videos (under 30MB) provide better performance</div>
         </div>
-
+        
         <!-- Marker Size -->
         <div class="mb-4">
           <label for="{{ form.marker_size.id_for_label }}" class="form-label">Marker Size</label>
@@ -358,65 +357,38 @@
           {% endif %}
           <div class="form-text">Adjust the size of the marker in AR space (default: 1.0)</div>
         </div>
-
+        
         <!-- Submit Button -->
         <button type="submit" class="btn btn-primary w-100">
           🚀 Create AR Experience
         </button>
       </form>
-
-      {% comment %} <!-- Marker Status -->
-      {% if marker_generated is not None %}
-        <div class="alert {{ marker_generated|yesno:'alert-success,alert-danger' }} mt-4">
-          <strong>
-            {{ marker_generated|yesno:'✅ Marker Generated Successfully!,❌ Marker Generation Failed' }}
-          </strong>
-          <div class="mt-2">
-            {{ marker_generated|yesno:'Your AR experience is ready to use,Using fallback marker. Experience may have limited tracking.' }}
-          </div>
-        </div>
-      {% endif %} {% endcomment %}
     </div>
   </div>
-{% if new_experience_slug %}
-    <!-- Success message when AR experience is created -->
-    <div class="alert alert-success">
+
+  <!-- Success Message Section -->
+  {% if new_experience_slug %}
+    <div class="container mt-4">
+      <div class="alert alert-success">
         <div class="success-title">✅ AR Experience Created Successfully!</div>
         <p><strong>"{{ new_experience_slug }}"</strong> is ready to launch!</p>
         <div class="mt-3">
-            {% for exp in experiences %}
-                {% if exp.slug == new_experience_slug %}
-                    <div class="btn-group">
-                        <a href="{% url 'experience_view' exp.slug %}" class="btn btn-primary">
-                            🎯 Launch AR Experience
-                        </a>
-                        <a href="{% url 'ar_experience' exp.id %}" class="btn btn-secondary">
-                            📱 View Details
-                        </a>
-                    </div>
-                {% endif %}
-            {% endfor %}
+          {% for exp in experiences %}
+            {% if exp.slug == new_experience_slug %}
+              <div class="btn-group">
+                <a href="{% url 'experience_view' exp.slug %}" class="btn btn-primary">
+                  🎯 Launch AR Experience
+                </a>
+                <a href="{% url 'ar_experience' exp.id %}" class="btn btn-secondary">
+                  📱 View Details
+                </a>
+              </div>
+            {% endif %}
+          {% endfor %}
         </div>
+      </div>
     </div>
-{% endif %}
-
-{% comment %} {% if not new_experience_slug %}
-    <!-- Failure message when AR experience fails to generate -->
-    <div class="alert alert-danger">
-        <div class="success-title">❌ AR Experience Generation Failed!</div>
-        <p>There was an issue generating the AR Experience. Please try again or check the provided details.</p>
-        <div class="mt-3">
-            <a href="{% url 'upload_view' %}" class="btn btn-danger">❌ Retry Upload</a>
-        </div>
-    </div>
-{% endif %} {% endcomment %}
-{% if messages %}
-    {% for message in messages %}
-        <div class="alert alert-{{ message.tags|default:'info' }}">
-            {{ message }}
-        </div>
-    {% endfor %}
-{% endif %}
+  {% endif %}
 
   <!-- Recent Experiences Section -->
   {% if experiences %}
@@ -437,7 +409,7 @@
                   {% if experience.video %}
                     <video src="{{ experience.video.url }}" controls class="mb-3 w-100" style="max-height: 150px; border-radius: 10px;"></video>
                   {% endif %}
-
+                  
                   <div class="mt-auto d-flex justify-content-between align-items-center">
                     {% if experience.qr_code %}
                       <img src="{{ experience.qr_code.url }}" alt="QR Code" class="qr-code">
@@ -465,7 +437,7 @@
     // Configuration
     const MAX_IMAGE_SIZE = 10 * 1024 * 1024;   // 10MB
     const MAX_VIDEO_SIZE = 200 * 1024 * 1024;  // 200MB
-
+    
     // Get form elements
     const imgInput = document.getElementById('{{ form.image.id_for_label }}') || document.querySelector('input[name="{{ form.image.html_name }}"]');
     const videoInput = document.getElementById('{{ form.video.id_for_label }}') || document.querySelector('input[name="{{ form.video.html_name }}"]');
@@ -475,12 +447,12 @@
     
     const imgPreview = document.getElementById('imgPreview');
     const videoPreview = document.getElementById('videoPreview');
-
+    
     // Hide file inputs
     [imgInput, videoInput].forEach(input => {
       if (input) input.style.display = 'none';
     });
-
+    
     // Click handlers for dropzones
     function setupClickHandler(dropzone, input) {
       if (!dropzone || !input) return;
@@ -493,35 +465,35 @@
         }
       });
     }
-
+    
     setupClickHandler(imgDrop, imgInput);
     setupClickHandler(videoDrop, videoInput);
-
+    
     // Drag and drop functionality
     function preventDefaults(e) {
       e.preventDefault();
       e.stopPropagation();
     }
-
+    
     function setupDragAndDrop(dropzone, input, isVideo = false) {
       if (!dropzone || !input) return;
-
+      
       ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropzone.addEventListener(eventName, preventDefaults, false);
       });
-
+      
       ['dragenter', 'dragover'].forEach(eventName => {
         dropzone.addEventListener(eventName, () => {
           dropzone.classList.add('dragover');
         }, false);
       });
-
+      
       ['dragleave', 'drop'].forEach(eventName => {
         dropzone.addEventListener(eventName, () => {
           dropzone.classList.remove('dragover');
         }, false);
       });
-
+      
       dropzone.addEventListener('drop', (e) => {
         const files = e.dataTransfer.files;
         if (files.length > 0) {
@@ -547,7 +519,7 @@
               return;
             }
           }
-
+          
           // Assign file to input
           const dataTransfer = new DataTransfer();
           dataTransfer.items.add(file);
@@ -556,20 +528,20 @@
         }
       }, false);
     }
-
+    
     setupDragAndDrop(imgDrop, imgInput, false);
     setupDragAndDrop(videoDrop, videoInput, true);
-
+    
     // Preview functionality
     function setupPreview(input, preview, isVideo = false) {
       if (!input || !preview) return;
-
+      
       input.addEventListener('change', () => {
         preview.innerHTML = '';
         const file = input.files?.[0];
         
         if (!file) return;
-
+        
         // Validate file
         if (isVideo) {
           if (!file.type.startsWith('video/')) {
@@ -594,7 +566,7 @@
             return;
           }
         }
-
+        
         // Create preview
         const element = document.createElement(isVideo ? 'video' : 'img');
         element.src = URL.createObjectURL(file);
@@ -607,26 +579,11 @@
         preview.appendChild(element);
       });
     }
-
+    
     setupPreview(imgInput, imgPreview, false);
     setupPreview(videoInput, videoPreview, true);
-
-    // Form submission handling
-    document.getElementById('uploadForm').addEventListener('submit', function(e) {
-      const submitBtn = this.querySelector('button[type="submit"]');
-      
-      // Show loading state
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '🔄 Creating AR Experience...';
-      
-      // Re-enable button after 30 seconds as fallback
-      setTimeout(() => {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '🚀 Create AR Experience';
-      }, 30000);
-    });
   </script>
-
+  
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
