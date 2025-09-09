@@ -3,27 +3,46 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    # Home and basic pages
+    # ============================================================================
+    # CORE PAGES
+    # ============================================================================
     path('', views.home, name='home'),
     path('scanner/', views.scanner, name='scanner'),
     path('upload/', views.upload_view, name='upload_view'),
     
+    # ============================================================================
+    # AR EXPERIENCE VIEWERS
+    # ============================================================================
     # Main AR Experience viewer (slug-based - RECOMMENDED)
     path('x/<slug:slug>/', views.experience_view, name='experience_view'),
+    
+    # Webcam AR experience
+    path('webcam/', views.webcam_ar_experience_view, name='webcam_ar_experience'),
+    path('webcam/<slug:slug>/', views.webcam_ar_experience_view, name='webcam_ar_experience_slug'),
     
     # Alternative AR viewers for compatibility
     path('ar/<slug:slug>/', views.ar_experience_by_slug, name='ar_experience_slug'),
     path('ar/<int:experience_id>/', views.ar_experience_view, name='ar_experience'),
     
-    # QR code generator
+    # ============================================================================
+    # BROWSER-BASED MINDAR COMPILER
+    # ============================================================================
+    path('browser-mindar-compiler/', views.browser_mindar_compiler, name='browser_mindar_compiler'),
+    path('save-browser-mindar-target/', views.save_browser_mindar_target, name='save_browser_mindar_target'),
+    
+    # ============================================================================
+    # API ENDPOINTS
+    # ============================================================================
+    path('api/ar-status/<slug:slug>/', views.ar_status_api, name='ar_status_api'),
+    path('api/marker-status/<slug:slug>/', views.marker_status_api, name='marker_status_api'),
+    
+    # ============================================================================
+    # UTILITY ENDPOINTS
+    # ============================================================================
     path('qr/<slug:slug>/', views.qr_view, name='qr_view'),
     
-    # Debug and utility endpoints
-    path('debug_markers/<slug:slug>/', views.debug_markers, name='debug_markers'),
-    path('debug/mindar-structure/', views.debug_mindar_library, name='debug_mindar_structure'),
-    path('debug/mindar-compilation/<slug:slug>/', views.debug_mindar_compilation, name='debug_mindar_compilation'),
-    path('regenerate_markers/<slug:slug>/', views.regenerate_markers, name='regenerate_markers'),
-    path('marker_status/<slug:slug>/', views.marker_status_api, name='marker_status_api'),
-    #path('debug/nft/<str:slug>/', views. debug_nft_files, name='debug_nft_files'),
-    path('rt/<slug:slug>/', views.realtime_experience_view, name='realtime_experience'),
+    # ============================================================================
+    # DEBUG ENDPOINTS (Development only)
+    # ============================================================================
+    path('debug/markers/<slug:slug>/', views.debug_markers, name='debug_markers'),
 ]

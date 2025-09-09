@@ -14,7 +14,7 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost", 
     ".ngrok-free.app",
-    "angry-arabic-deleted-supplied.trycloudflare.com"
+    "local-singer-good-allocation.trycloudflare.com"
 ]
 
 # ==============================================================================
@@ -135,7 +135,7 @@ CORS_ALLOW_ALL_ORIGINS = True  # For development only
 CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://localhost:8000",
-    "https://angry-arabic-deleted-supplied.trycloudflare.com",
+    "https://folk-albuquerque-tgp-idol.trycloudflare.com",
 ]
 
 CORS_ALLOW_HEADERS = [
@@ -157,7 +157,7 @@ CORS_ALLOW_HEADERS = [
 CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://localhost:8000",
-    "https://angry-arabic-deleted-supplied.trycloudflare.com",
+    "https://folk-albuquerque-tgp-idol.trycloudflare.com",
 ]
 
 CSRF_COOKIE_SECURE = False      # Set to True in production with HTTPS

@@ -4,155 +4,52 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
-    <title>{{ title|default:experience.title }} - MindAR Experience</title>
+    <title>{{ title|default:experience.title }} - AR Experience</title>
     
-    <!-- MindAR Scripts -->
+    <!-- Force HTTPS (Critical for camera) -->
+    <script>
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        location.replace(`https:${location.href.substring(location.protocol.length)}`);
+    }
+    </script>
+    
+    <!-- MindAR and A-Frame Libraries -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     
     <style>
-        * { 
-            margin: 0; 
-            padding: 0; 
-            box-sizing: border-box; 
-        }
-        
         html, body {
-            width: 100% !important;
-            height: 100% !important;
-            overflow: hidden !important;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
             background: #000;
-            color: white;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            font-family: Arial, sans-serif;
+            width: 100%;
+            height: 100%;
         }
         
-        /* Ensure MindAR scene fills entire viewport */
-        #ar-scene {
+        /* Camera feed visibility */
+        a-scene {
+            display: block !important;
+            visibility: visible !important;
+            width: 100vw !important;
+            height: 100vh !important;
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
             z-index: 1 !important;
         }
         
-        /* Force canvas to be visible and fill screen */
-        #ar-scene canvas {
-            width: 100% !important;
-            height: 100% !important;
+        a-scene canvas {
             display: block !important;
             visibility: visible !important;
+            width: 100% !important;
+            height: 100% !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
         }
         
-        /* Start Button */
-        #start-ar {
-            position: fixed; 
-            top: 50%; 
-            left: 50%; 
-            transform: translate(-50%, -50%);
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; 
-            padding: 20px 40px;
-            border: none; 
-            border-radius: 25px; 
-            font-size: 18px; 
-            font-weight: 600;
-            cursor: pointer; 
-            z-index: 1000;
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-            transition: all 0.3s ease;
-        }
-        
-        #start-ar:hover {
-            transform: translate(-50%, -50%) scale(1.05);
-        }
-        
-        /* Status Panel */
-        #status {
-            position: fixed; 
-            top: 20px; 
-            left: 20px;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(10px);
-            color: white; 
-            padding: 16px;
-            border-radius: 12px; 
-            font-size: 13px; 
-            z-index: 999;
-            min-width: 220px;
-        }
-        
-        .status-item {
-            display: flex;
-            align-items: center;
-            margin: 8px 0;
-        }
-        
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 12px;
-        }
-        
-        .ready { background: #10b981; }
-        .active { background: #f59e0b; }
-        .error { background: #ef4444; }
-        
-        /* Instructions */
-        #instructions {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            color: #10b981;
-            padding: 16px;
-            border-radius: 12px;
-            z-index: 999;
-            font-size: 14px;
-            display: none;
-            max-width: 320px;
-            backdrop-filter: blur(10px);
-        }
-        
-        #instructions h4 {
-            margin-bottom: 12px;
-            color: #ffffff;
-        }
-        
-        #instructions ul {
-            list-style: none;
-            padding: 0;
-        }
-        
-        #instructions li {
-            margin: 6px 0;
-            padding-left: 16px;
-            position: relative;
-        }
-        
-        #instructions li::before {
-            content: "•";
-            color: #10b981;
-            position: absolute;
-            left: 0;
-        }
-        
-        /* Marker Preview */
-        #marker-preview {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            width: 100px;
-            height: 100px;
-            border: 2px solid rgba(16, 185, 129, 0.8);
-            border-radius: 12px;
-            z-index: 998;
-            object-fit: cover;
-        }
-        
-        /* Loading */
         #loading {
             position: fixed;
             top: 0;
@@ -160,18 +57,23 @@
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.9);
-            display: none;
+            display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 1001;
-            flex-direction: column;
+            z-index: 1000;
+            color: white;
         }
         
-        .loading-spinner {
+        #loading.hidden {
+            display: none !important;
+        }
+        
+        .spinner {
             width: 50px;
             height: 50px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-left: 4px solid #667eea;
+            border: 3px solid #333;
+            border-top: 3px solid #00ff00;
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin-bottom: 20px;
@@ -182,602 +84,471 @@
             100% { transform: rotate(360deg); }
         }
         
-        /* Error Panel */
-        #error-panel {
+        #status {
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(239, 68, 68, 0.95);
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 30px;
-            border-radius: 16px;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 999;
+            font-family: monospace;
+        }
+        
+        #instructions {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
             text-align: center;
-            z-index: 1002;
+            z-index: 999;
+            max-width: 320px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-ready { background: #00ff00; }
+        .status-searching { background: #ff9500; animation: pulse 1s infinite; }
+        .status-tracking { background: #0099ff; }
+        .status-error { background: #ff0000; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Camera feed preview - now persistent until MindAR takes over */
+        #camera-preview {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 2;
             display: none;
-            max-width: 400px;
-        }
-        
-        .error-button {
-            background: white;
-            color: #ef4444;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            margin: 8px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        
-        /* Mobile Responsive */
-        @media (max-width: 768px) {
-            #status {
-                top: 10px;
-                left: 10px;
-                right: 10px;
-                min-width: auto;
-                font-size: 12px;
-            }
-            
-            #instructions {
-                bottom: 10px;
-                left: 10px;
-                right: 10px;
-                max-width: none;
-                font-size: 13px;
-            }
-            
-            #marker-preview {
-                width: 80px;
-                height: 80px;
-            }
         }
     </style>
 </head>
 <body>
-    <!-- Start Button -->
-    <button id="start-ar">🚀 Start AR Experience</button>
+    <!-- Camera Preview (persistent until MindAR takes over) -->
+    <video id="camera-preview" autoplay playsinline></video>
     
-    <!-- Loading -->
+    <!-- Loading Screen -->
     <div id="loading">
-        <div class="loading-spinner"></div>
-        <h2>Initializing MindAR...</h2>
-        <p>Setting up camera and AR tracking</p>
+        <div class="spinner"></div>
+        <h2>🎥 Starting Camera Feed...</h2>
+        <p>Initializing AR camera display...</p>
     </div>
     
-    <!-- Error Panel -->
-    <div id="error-panel">
-        <h3>⚠️ AR Setup Error</h3>
-        <p id="error-message">Something went wrong with the AR initialization.</p>
-        <div>
-            <button class="error-button" onclick="location.reload()">Reload Page</button>
-            <button class="error-button" onclick="window.history.back()">Go Back</button>
-        </div>
-    </div>
-    
-    <!-- Status Panel -->
+    <!-- Status Display -->
     <div id="status">
-        <div class="status-item">
-            <span class="status-dot ready"></span>
-            <span>📹 Camera: <strong id="camera-status">Ready</strong></span>
-        </div>
-        <div class="status-item">
-            <span class="status-dot ready"></span>
-            <span>🧠 MindAR: <strong id="mindar-status">Ready</strong></span>
-        </div>
-        <div class="status-item">
-            <span class="status-dot ready"></span>
-            <span>🎯 Target: <strong id="target-status">Checking...</strong></span>
-        </div>
-        <div class="status-item">
-            <span class="status-dot ready"></span>
-            <span>🎬 Video: <strong id="video-status">Ready</strong></span>
-        </div>
+        <div><span class="status-indicator status-searching" id="camera-indicator"></span>Camera: <span id="camera-status">Initializing...</span></div>
+        <div><span class="status-indicator status-searching" id="tracking-indicator"></span>Tracking: <span id="tracking-status">Waiting...</span></div>
+        <div><span class="status-indicator status-searching" id="video-indicator"></span>Video: <span id="video-status">Loading...</span></div>
+        <div><span class="status-indicator status-searching" id="feed-indicator"></span>Feed: <span id="feed-status">Starting...</span></div>
     </div>
     
     <!-- Instructions -->
     <div id="instructions">
-        <h4>📱 AR Detection Guide</h4>
-        <ul>
-            <li>Hold marker 20-40cm from camera</li>
-            <li>Ensure good, even lighting</li>
-            <li>Keep marker flat and fully visible</li>
-            <li>Wait for the green tracking indicator</li>
-            <li>Move slowly for better tracking</li>
-        </ul>
+        <div style="font-size: 18px; margin-bottom: 10px;">🎯 Point Camera at Marker</div>
+        <div>Point your device at the marker image to see the AR content.</div>
     </div>
-    
-    <!-- Marker Preview -->
-    <img id="marker-preview" src="{{ marker_image_url }}" alt="AR Marker">
     
     <!-- MindAR Scene -->
     <a-scene
         id="ar-scene"
-        mindar-image="imageTargetSrc: {{ marker_base_url }}.mind; 
-                    maxTrack: 1; 
-                    filterMinCF: 0.0001; 
-                    filterBeta: 0.001;
-                    warmupTolerance: 2; 
-                    missTolerance: 5; 
-                    autoStart: false;
-                    showStats: false; 
-                    uiLoading: no; 
-                    uiError: no; 
-                    uiScanning: no;"
-        style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; display: none;"
+        mindar-image="imageTargetSrc: {{ marker_base_url }}; autoStart: false; uiLoading: no; uiError: no; uiScanning: no; maxTrack: 1;"
+        color-space="sRGB"
+        renderer="antialias: true; alpha: true"
         vr-mode-ui="enabled: false"
         device-orientation-permission-ui="enabled: false"
-        renderer="colorManagement: true; physicallyCorrectLights: true;"
-        background="transparent">
-        
+    >
         <a-assets>
-            {% if video_url %}
+            {% if experience.video %}
             <video 
                 id="ar-video" 
-                src="{{ video_url }}" 
+                src="{{ experience.video.url }}" 
                 loop 
                 muted 
                 playsinline 
                 webkit-playsinline 
                 crossorigin="anonymous"
-                preload="auto"
-                style="display: none;">
+                preload="metadata">
             </video>
             {% endif %}
         </a-assets>
         
-        <!-- Camera -->
-        <a-camera 
-            position="0 0 0" 
-            look-controls="enabled: false"
-            cursor="rayOrigin: mouse">
-        </a-camera>
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
         
-        <!-- AR Content -->
-        <a-entity id="target-content" mindar-image-target="targetIndex: 0">
-            {% if video_url %}
-            <!-- Video Overlay -->
+        {% if marker_files_exist %}
+        <a-entity mindar-image-target="targetIndex: 0">
+            {% if experience.video %}
             <a-video 
                 id="video-overlay"
                 src="#ar-video" 
-                position="0 0 0.01" 
-                rotation="0 0 0" 
-                width="1.2" 
-                height="0.8"
+                position="0 0 0" 
+                rotation="-90 0 0" 
+                width="1.6" 
+                height="0.9"
+                opacity="0"
                 visible="false">
             </a-video>
-            {% endif %}
-            
-            <!-- Detection Border -->
-            <a-plane 
-                id="detection-border"
+            {% else %}
+            <!-- Fallback content when no video -->
+            <a-box 
                 position="0 0 0" 
-                rotation="0 0 0" 
-                width="1.3" 
-                height="0.9"
-                opacity="0.1"
-                color="#10b981"
-                visible="false"
-                material="transparent: true;">
-            </a-plane>
+                rotation="-90 0 0" 
+                depth="0.01" 
+                width="1.6" 
+                height="0.9" 
+                color="#0099ff"
+                opacity="0.8">
+            </a-box>
             
-            <!-- Title -->
             <a-text 
-                value="{{ experience.title }}"
-                position="0 -0.5 0.02"
+                value="AR Content Ready" 
+                position="0 0 0.02" 
+                rotation="-90 0 0" 
+                align="center" 
+                color="#fff"
+                scale="0.5 0.5 0.5">
+            </a-text>
+            {% endif %}
+        </a-entity>
+        {% else %}
+        <!-- Error state -->
+        <a-entity position="0 0 -1">
+            <a-text 
+                value="Marker files missing or invalid" 
+                color="#ff4444" 
                 align="center"
-                color="#ffffff"
-                width="3"
-                visible="false">
+                scale="0.8 0.8 0.8">
             </a-text>
         </a-entity>
+        {% endif %}
     </a-scene>
-
-<script>
-//=============================================================================
-// MINDAR AR EXPERIENCE - CLEAN IMPLEMENTATION
-//=============================================================================
-
-// Global State
-const ARState = {
-    userInteracted: false,
-    cameraGranted: false,
-    mindArReady: false,
-    targetFound: false,
-    arStarted: false,
-    videoPlaying: false
-};
-
-// DOM Elements
-const Elements = {};
-
-//=============================================================================
-// INITIALIZATION
-//=============================================================================
-
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 MindAR AR Experience Starting...');
-    console.log('=== DEBUG INFO ===');
-    console.log('Marker base URL:', "{{ marker_base_url }}");
-    console.log('Target file URL:', "{{ marker_base_url }}.mind");
-    console.log('Marker image URL:', "{{ marker_image_url }}");
-    console.log('Video URL:', "{{ video_url }}");
-    console.log('=================');
     
-    // Initialize
-    cacheElements();
-    setupEventListeners();
-    checkTargetFile();
-    
-    console.log('✅ AR Experience initialized');
-});
-
-function cacheElements() {
-    const elementIds = [
-        'start-ar', 'loading', 'ar-scene', 'ar-video', 
-        'video-overlay', 'instructions', 'error-panel', 
-        'marker-preview', 'detection-border',
-        'camera-status', 'mindar-status', 'target-status', 'video-status'
-    ];
-    
-    elementIds.forEach(id => {
-        Elements[id] = document.getElementById(id);
-    });
-}
-
-function setupEventListeners() {
-    Elements['start-ar']?.addEventListener('click', startARExperience);
-    
-    // User interaction tracking
-    ['click', 'touchstart'].forEach(event => {
-        document.addEventListener(event, () => {
-            ARState.userInteracted = true;
-        }, { once: true });
-    });
-}
-
-//=============================================================================
-// AR EXPERIENCE FLOW
-//=============================================================================
-
-async function startARExperience() {
-    if (ARState.arStarted) return;
-    
-    try {
-        ARState.userInteracted = true;
+    <script>
+        let arInitialized = false;
+        let cameraFeedVisible = false;
+        let cameraStream = null;
+        let previewVisible = false;
         
-        // Show loading
-        Elements['start-ar'].style.display = 'none';
-        Elements['loading'].style.display = 'flex';
-        updateStatus('camera-status', 'Starting...', 'active');
+        function safeUpdate(elementId, text) {
+            try {
+                const el = document.getElementById(elementId);
+                if (el) el.textContent = text;
+            } catch (error) {
+                console.warn(`Error updating ${elementId}:`, error.message);
+            }
+        }
         
-        // Request camera permission
-        await requestCameraPermission();
+        function updateStatusIndicator(type, status) {
+            try {
+                const indicator = document.getElementById(`${type}-indicator`);
+                if (indicator) {
+                    indicator.className = `status-indicator status-${status}`;
+                }
+            } catch (error) {
+                console.warn(`Error updating ${type} indicator:`, error.message);
+            }
+        }
         
-        // Initialize AR
-        await initializeMindAR();
+        function hideLoading() {
+            try {
+                const loading = document.getElementById('loading');
+                if (loading) {
+                    loading.classList.add('hidden');
+                    loading.style.display = 'none';
+                }
+            } catch (error) {
+                console.warn('Error hiding loading:', error.message);
+            }
+        }
         
-    } catch (error) {
-        console.error('❌ Failed to start AR experience:', error);
-        showError('Failed to start AR experience: ' + error.message);
-    }
-}
-
-async function requestCameraPermission() {
-    try {
-        updateStatus('camera-status', 'Requesting...', 'active');
+        // HIDE CAMERA PREVIEW - only when MindAR is ready
+        function hideCameraPreview() {
+            const preview = document.getElementById('camera-preview');
+            if (preview) {
+                preview.style.display = 'none';
+                previewVisible = false;
+                console.log('📹 Camera preview hidden');
+            }
+        }
         
-        // Request camera with specific constraints
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                facingMode: 'environment' // Back camera on mobile
-            } 
+        // SHOW CAMERA PREVIEW - for debugging
+        function showCameraPreview() {
+            const preview = document.getElementById('camera-preview');
+            if (preview && cameraStream) {
+                preview.srcObject = cameraStream;
+                preview.style.display = 'block';
+                previewVisible = true;
+                console.log('📹 Camera preview shown');
+            }
+        }
+        
+        // FORCE SCENE VISIBILITY
+        function forceSceneDisplay() {
+            const scene = document.getElementById('ar-scene');
+            if (scene) {
+                scene.style.display = 'block';
+                scene.style.visibility = 'visible';
+                scene.style.width = '100vw';
+                scene.style.height = '100vh';
+                scene.style.position = 'fixed';
+                scene.style.top = '0';
+                scene.style.left = '0';
+                scene.style.zIndex = '1';
+                
+                // Force canvas visibility
+                const canvas = scene.querySelector('canvas');
+                if (canvas) {
+                    canvas.style.display = 'block';
+                    canvas.style.visibility = 'visible';
+                    canvas.style.width = '100%';
+                    canvas.style.height = '100%';
+                    console.log('🎬 Forced canvas display');
+                    safeUpdate('feed-status', 'Canvas Active');
+                    updateStatusIndicator('feed', 'ready');
+                } else {
+                    console.log('⏳ Canvas not ready yet');
+                }
+            }
+        }
+        
+        // CAMERA INITIALIZATION
+        async function initializeCamera() {
+            try {
+                console.log('📹 Initializing camera...');
+                safeUpdate('camera-status', 'Requesting...');
+                updateStatusIndicator('camera', 'searching');
+                
+                const constraints = {
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                };
+                
+                // Get camera stream
+                cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+                console.log('✅ Camera stream active:', cameraStream.active);
+                safeUpdate('camera-status', 'Stream Active');
+                updateStatusIndicator('camera', 'ready');
+                
+                // Show camera preview (persistent until MindAR takes over)
+                showCameraPreview();
+                
+                // Force scene display
+                forceSceneDisplay();
+                safeUpdate('feed-status', 'Camera Active');
+                updateStatusIndicator('feed', 'ready');
+                
+                return true;
+            } catch (error) {
+                console.error('❌ Camera initialization failed:', error);
+                safeUpdate('camera-status', 'Failed: ' + error.name);
+                updateStatusIndicator('camera', 'error');
+                safeUpdate('feed-status', 'Error');
+                updateStatusIndicator('feed', 'error');
+                
+                alert('Camera error: ' + error.message + '\n\nEnsure you are using HTTPS and have granted camera permissions.');
+                return false;
+            }
+        }
+        
+        // INITIALIZE AR
+        async function initializeAR() {
+            if (arInitialized) return;
+            arInitialized = true;
+            
+            console.log('🚀 Initializing AR with MindAR marker tracking...');
+            
+            // Initialize camera first
+            const cameraReady = await initializeCamera();
+            if (!cameraReady) {
+                console.error('Camera initialization failed, aborting AR initialization');
+                return;
+            }
+            
+            const elements = {
+                scene: document.getElementById('ar-scene'),
+                video: document.getElementById('ar-video'),
+                overlay: document.getElementById('video-overlay')
+            };
+            
+            console.log('🔍 Elements found:', {
+                scene: !!elements.scene,
+                video: !!elements.video,
+                overlay: !!elements.overlay
+            });
+            
+            // Setup MindAR events
+            if (elements.scene) {
+                elements.scene.addEventListener("arReady", (event) => {
+                    console.log("🎯 MindAR is ready");
+                    safeUpdate('tracking-status', 'Ready');
+                    updateStatusIndicator('tracking', 'ready');
+                    
+                    // Start the AR experience
+                    elements.scene.setAttribute("mindar-image", "autoStart: true");
+                    
+                    // Hide loading screen
+                    setTimeout(hideLoading, 1000);
+                });
+                
+                elements.scene.addEventListener("arError", (event) => {
+                    console.error("❌ MindAR error:", event);
+                    safeUpdate('tracking-status', 'Error');
+                    updateStatusIndicator('tracking', 'error');
+                    safeUpdate('feed-status', 'Error');
+                    updateStatusIndicator('feed', 'error');
+                });
+                
+                elements.scene.addEventListener("targetFound", (event) => {
+                    console.log("🎯 Target found");
+                    safeUpdate('tracking-status', 'Tracking');
+                    updateStatusIndicator('tracking', 'tracking');
+                    
+                    if (elements.video && elements.overlay) {
+                        elements.overlay.setAttribute('visible', 'true');
+                        elements.overlay.setAttribute('opacity', '0.95');
+                        
+                        elements.video.play().then(() => {
+                            console.log('▶️ Video playing');
+                            safeUpdate('video-status', 'Playing');
+                            updateStatusIndicator('video', 'tracking');
+                        }).catch(error => {
+                            console.warn('⚠️ Video play blocked:', error);
+                            safeUpdate('video-status', 'Tap to play');
+                            updateStatusIndicator('video', 'ready');
+                            
+                            // Add click handler for manual play
+                            document.addEventListener('click', function playVideo() {
+                                elements.video.play();
+                                document.removeEventListener('click', playVideo);
+                            });
+                        });
+                    }
+                });
+                
+                elements.scene.addEventListener("targetLost", (event) => {
+                    console.log("❌ Target lost");
+                    safeUpdate('tracking-status', 'Searching...');
+                    updateStatusIndicator('tracking', 'searching');
+                    
+                    if (elements.overlay) {
+                        elements.overlay.setAttribute('visible', 'false');
+                        elements.overlay.setAttribute('opacity', '0');
+                    }
+                    
+                    if (elements.video && !elements.video.paused) {
+                        elements.video.pause();
+                        safeUpdate('video-status', 'Paused');
+                        updateStatusIndicator('video', 'ready');
+                    }
+                });
+                
+                elements.scene.addEventListener("renderstart", function() {
+                    console.log('🎬 Rendering started');
+                    safeUpdate('feed-status', 'Rendering');
+                    updateStatusIndicator('feed', 'tracking');
+                    cameraFeedVisible = true;
+                    
+                    // Hide camera preview only when MindAR is rendering
+                    hideCameraPreview();
+                });
+            }
+            
+            if (elements.video) {
+                elements.video.addEventListener('loadeddata', function() {
+                    console.log('🎥 Video data loaded');
+                    safeUpdate('video-status', 'Ready');
+                    updateStatusIndicator('video', 'ready');
+                });
+            }
+            
+            // Fallback loading hide
+            setTimeout(() => {
+                if (!cameraFeedVisible) {
+                    console.log('⏰ Fallback: hiding loading screen');
+                    hideLoading();
+                    safeUpdate('feed-status', 'Check feed');
+                    updateStatusIndicator('feed', 'ready');
+                    
+                    // If MindAR hasn't started rendering yet, keep camera preview visible
+                    if (!cameraFeedVisible && !previewVisible) {
+                        showCameraPreview();
+                    }
+                }
+            }, 8000);
+        }
+        
+        // Initialize with proper timing
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(initializeAR, 1000);
+            });
+        } else {
+            setTimeout(initializeAR, 1000);
+        }
+        
+        // Additional initialization methods
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                forceSceneDisplay();
+                if (!arInitialized) initializeAR();
+            }, 1500);
         });
         
-        console.log('✅ Camera permission granted');
-        updateStatus('camera-status', 'Granted', 'ready');
-        
-        // Stop test stream (MindAR will handle the actual stream)
-        stream.getTracks().forEach(track => track.stop());
-        ARState.cameraGranted = true;
-        
-    } catch (error) {
-        console.error('❌ Camera permission denied:', error);
-        updateStatus('camera-status', 'Denied', 'error');
-        
-        let errorMsg = 'Camera access denied. ';
-        if (error.name === 'NotFoundError') {
-            errorMsg += 'No camera found on this device.';
-        } else if (error.name === 'NotAllowedError') {
-            errorMsg += 'Please allow camera access and reload the page.';
-        } else if (error.name === 'NotReadableError') {
-            errorMsg += 'Camera is being used by another application.';
-        }
-        
-        throw new Error(errorMsg);
-    }
-}
-
-async function initializeMindAR() {
-    console.log('🧠 Initializing MindAR system...');
-    updateStatus('mindar-status', 'Starting...', 'active');
-    
-    try {
-        // Setup video element
-        setupVideoElement();
-        
-        // Setup MindAR events
-        setupMindAREvents();
-        
-        // Show AR scene
-        Elements['loading'].style.display = 'none';
-        Elements['ar-scene'].style.display = 'block';
-        Elements['instructions'].style.display = 'block';
-        
-        // Start AR scene
-        await startARScene();
-        
-    } catch (error) {
-        console.error('❌ MindAR initialization failed:', error);
-        throw error;
-    }
-}
-
-function setupVideoElement() {
-    if (!Elements['ar-video']) return;
-    
-    const video = Elements['ar-video'];
-    video.muted = true;
-    video.playsInline = true;
-    video.autoplay = false; // Control manually
-    video.loop = true;
-    
-    // Video event listeners
-    video.addEventListener('loadeddata', () => {
-        console.log('📹 Video data loaded');
-        updateStatus('video-status', 'Loaded', 'ready');
-    });
-    
-    video.addEventListener('play', () => {
-        console.log('▶️ Video playing');
-        ARState.videoPlaying = true;
-        updateStatus('video-status', 'Playing', 'active');
-    });
-    
-    video.addEventListener('pause', () => {
-        console.log('⏸️ Video paused');
-        ARState.videoPlaying = false;
-        updateStatus('video-status', 'Paused', 'ready');
-    });
-    
-    video.load();
-}
-
-async function startARScene() {
-    console.log('🚀 Starting AR scene...');
-    
-    try {
-        const scene = Elements['ar-scene'];
-        
-        if (scene.hasLoaded) {
-            await initializeARSystem();
-        } else {
-            scene.addEventListener('loaded', initializeARSystem);
-        }
-        
-    } catch (error) {
-        console.error('❌ Failed to start AR scene:', error);
-        throw error;
-    }
-}
-
-async function initializeARSystem() {
-    try {
-        console.log('🔧 Starting MindAR system...');
-        
-        const scene = Elements['ar-scene'];
-        const arSystem = scene.systems['mindar-image-system'];
-        
-        if (arSystem) {
-            await arSystem.start();
-            ARState.arStarted = true;
-            updateStatus('camera-status', 'Active', 'ready');
-            updateStatus('mindar-status', 'Active', 'ready');
-            console.log('✅ AR system started - camera feed should be visible');
-            
-            // Force scene visibility
-            scene.style.display = 'block';
-            scene.style.visibility = 'visible';
-            
-        } else {
-            throw new Error('MindAR system not found');
-        }
-        
-    } catch (error) {
-        console.error('❌ AR system failed:', error);
-        showError('AR system failed to start. Check camera permissions and marker file.');
-        throw error;
-    }
-}
-
-//=============================================================================
-// MINDAR EVENT HANDLING
-//=============================================================================
-
-function setupMindAREvents() {
-    const scene = Elements['ar-scene'];
-    
-    // System ready
-    scene.addEventListener('renderstart', () => {
-        ARState.mindArReady = true;
-        console.log('✅ MindAR rendering started - camera feed is now active');
-        updateStatus('mindar-status', 'Tracking', 'ready');
-    });
-    
-    // Target detection
-    scene.addEventListener('targetFound', (e) => {
-        ARState.targetFound = true;
-        console.log('🎯 Target detected!');
-        updateStatus('target-status', 'DETECTED!', 'active');
-        
-        // Show AR content
-        showARContent();
-        
-        // Play video
-        if (ARState.userInteracted && Elements['ar-video']) {
-            playVideo();
-        }
-        
-        Elements['instructions'].style.display = 'none';
-    });
-    
-    scene.addEventListener('targetLost', (e) => {
-        ARState.targetFound = false;
-        console.log('⚠️ Target lost');
-        updateStatus('target-status', 'Searching...', 'ready');
-        
-        // Hide AR content
-        hideARContent();
-        
-        // Pause video
-        if (Elements['ar-video']) {
-            Elements['ar-video'].pause();
-        }
-        
-        Elements['instructions'].style.display = 'block';
-    });
-    
-    scene.addEventListener('arError', (e) => {
-        console.error('🚨 MindAR Error:', e.detail);
-        updateStatus('mindar-status', 'Error', 'error');
-        showError('MindAR tracking error: ' + e.detail);
-    });
-}
-
-//=============================================================================
-// AR CONTENT MANAGEMENT
-//=============================================================================
-
-function showARContent() {
-    const elements = ['video-overlay', 'detection-border'];
-    
-    elements.forEach(id => {
-        const element = Elements[id];
-        if (element) {
-            element.setAttribute('visible', 'true');
-        }
-    });
-    
-    // Show title text
-    const titleElement = document.querySelector('a-text');
-    if (titleElement) {
-        titleElement.setAttribute('visible', 'true');
-    }
-}
-
-function hideARContent() {
-    const elements = ['video-overlay', 'detection-border'];
-    
-    elements.forEach(id => {
-        const element = Elements[id];
-        if (element) {
-            element.setAttribute('visible', 'false');
-        }
-    });
-    
-    // Hide title text
-    const titleElement = document.querySelector('a-text');
-    if (titleElement) {
-        titleElement.setAttribute('visible', 'false');
-    }
-}
-
-//=============================================================================
-// VIDEO PLAYBACK
-//=============================================================================
-
-function playVideo() {
-    if (!Elements['ar-video']) return;
-    
-    Elements['ar-video'].play().then(() => {
-        console.log('✅ Video playing automatically');
-    }).catch((error) => {
-        console.log('⚠️ Video autoplay failed:', error);
-        // Could add manual play button here if needed
-    });
-}
-
-//=============================================================================
-// TARGET FILE VALIDATION
-//=============================================================================
-
-async function checkTargetFile() {
-    const targetUrl = "{{ marker_base_url }}.mind";
-    
-    if (!targetUrl || targetUrl.includes('undefined') || targetUrl.includes('None')) {
-        updateStatus('target-status', 'Invalid Path', 'error');
-        return;
-    }
-    
-    try {
-        const response = await fetch(targetUrl, { method: 'HEAD' });
-        
-        if (response.ok) {
-            const size = response.headers.get('content-length');
-            console.log(`✅ Target file found (${size} bytes)`);
-            
-            if (size && parseInt(size) < 1000) {
-                updateStatus('target-status', 'File Small', 'error');
-                showError(`Marker file is too small (${size} bytes). Please regenerate it.`);
-            } else {
-                updateStatus('target-status', 'File Ready', 'ready');
+        // Force visibility every few seconds until feed is visible
+        setInterval(() => {
+            if (!cameraFeedVisible && arInitialized) {
+                forceSceneDisplay();
+                
+                // If MindAR hasn't taken over, ensure camera preview is visible
+                if (!previewVisible && cameraStream) {
+                    showCameraPreview();
+                }
             }
-        } else {
-            updateStatus('target-status', 'File Missing', 'error');
-            showError(`Marker file not found (HTTP ${response.status})`);
+        }, 3000);
+        
+        // Enhanced error handling
+        window.addEventListener('error', function(event) {
+            if (event.error && event.error.message && 
+                !event.error.message.includes('style')) {
+                console.error('🚨 Error:', event.error.message);
+            }
+        });
+        
+        // Debug function
+        function debugCameraFeed() {
+            console.log('🔍 Camera Feed Debug:', {
+                initialized: arInitialized,
+                feedVisible: cameraFeedVisible,
+                previewVisible: previewVisible,
+                scene: !!document.getElementById('ar-scene'),
+                canvas: !!document.querySelector('a-scene canvas'),
+                cameraStream: !!cameraStream,
+                protocol: location.protocol
+            });
         }
-    } catch (error) {
-        console.error('❌ Target file check failed:', error);
-        updateStatus('target-status', 'Check Failed', 'error');
-        showError('Failed to check marker file: ' + error.message);
-    }
-}
-
-//=============================================================================
-// UTILITY FUNCTIONS
-//=============================================================================
-
-function updateStatus(statusId, text, statusClass) {
-    const element = Elements[statusId];
-    if (element) {
-        element.textContent = text;
-        const statusItem = element.closest('.status-item');
-        const dot = statusItem?.querySelector('.status-dot');
-        if (dot) {
-            dot.className = `status-dot ${statusClass}`;
-        }
-    }
-}
-
-function showError(message) {
-    const errorPanel = Elements['error-panel'];
-    const errorMessage = document.getElementById('error-message');
-    
-    if (errorPanel && errorMessage) {
-        errorMessage.textContent = message;
-        errorPanel.style.display = 'block';
-    }
-    
-    console.error('🚨 Error:', message);
-}
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-console.log('🧠 Clean MindAR Experience Ready');
-</script>
+        
+        setTimeout(debugCameraFeed, 5000);
+    </script>
 </body>
 </html>
