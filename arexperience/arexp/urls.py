@@ -1,6 +1,6 @@
-# arexp/urls.py
 from django.urls import path
 from . import views
+
 
 urlpatterns = [
     # ============================================================================
@@ -34,7 +34,12 @@ urlpatterns = [
     # API ENDPOINTS
     # ============================================================================
     path('api/ar-status/<slug:slug>/', views.ar_status_api, name='ar_status_api'),
-    path('api/marker-status/<slug:slug>/', views.marker_status_api, name='marker_status_api'),
+    path('api/marker-status/<slug:slug>/', views.marker_status_api, name='marker_status_api'),  # FIXED
+    
+    # Backend tracking validation APIs
+    path('api/validate-tracking/<slug:slug>/', views.validate_tracking_api, name='validate_tracking_api'),
+    path('api/start-realtime-tracking/<slug:slug>/', views.start_realtime_tracking_api, name='start_realtime_tracking_api'),
+    path('api/stop-realtime-tracking/<slug:slug>/', views.stop_realtime_tracking_api, name='stop_realtime_tracking_api'),
     
     # ============================================================================
     # UTILITY ENDPOINTS

@@ -14,7 +14,7 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost", 
     ".ngrok-free.app",
-    "local-singer-good-allocation.trycloudflare.com"
+    "asked-lets-certainly-options.trycloudflare.com"
 ]
 
 # ==============================================================================
@@ -28,7 +28,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "corsheaders",  # For CORS handling
-    "arexp",        # Your AR Experience app
+    "arexp",
+    'channels',# Your AR Experience app
 ]
 
 # ==============================================================================
@@ -179,3 +180,14 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # DEFAULT SETTINGS
 # ==============================================================================
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
+    },
+}
+
+
+ASGI_APPLICATION = 'yourproject.asgi.application'
