@@ -14,11 +14,11 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost", 
     ".ngrok-free.app",
-    "asked-lets-certainly-options.trycloudflare.com"
+    "carpet-info-plates-satisfactory.trycloudflare.com"
 ]
 
 # ==============================================================================
-# APPLICATIONS
+# APPLICAT/weather-spa-herein-coupled.trycloudflare.comIONS
 # ==============================================================================
 INSTALLED_APPS = [
     "django.contrib.admin",

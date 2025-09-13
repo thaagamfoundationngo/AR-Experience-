@@ -50,4 +50,5 @@ urlpatterns = [
     # DEBUG ENDPOINTS (Development only)
     # ============================================================================
     path('debug/markers/<slug:slug>/', views.debug_markers, name='debug_markers'),
+    
 ]
