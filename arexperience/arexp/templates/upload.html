@@ -210,7 +210,7 @@
                 <a href="{% url 'experience_view' exp.slug %}" class="btn btn-primary">
                   🎯 Launch AR Experience
                 </a>
-                <a href="{% url 'ar_experience' exp.id %}" class="btn btn-secondary">
+                <a href="{% url 'ar_experience_slug' exp.slug %}" class="btn btn-secondary">
                   📱 View Details
                 </a>
               </div>
@@ -245,7 +245,7 @@
                       <a href="{% url 'experience_view' experience.slug %}" class="btn btn-primary btn-sm mb-1">
                         🎯 Launch AR
                       </a>
-                      <a href="{% url 'ar_experience' experience.id %}" class="btn btn-outline-secondary btn-sm">
+                      <a href="{% url 'ar_experience_slug' experience.slug %}" class="btn btn-outline-secondary btn-sm">
                         📱 View Details
                       </a>
                       {% if experience.marker_generated %}

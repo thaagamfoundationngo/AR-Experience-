@@ -11,5 +11,7 @@ urlpatterns = [
 
 # ✅ Serve media files in development
 if settings.DEBUG:
+    # serve uploaded media in dev
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    # optional: serve collected static (only needed if you also want STATIC_ROOT in dev)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

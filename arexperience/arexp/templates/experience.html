@@ -2,149 +2,105 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
-    <title>{{ title|default:experience.title }} - AR Experience</title>
-    
-    <!-- MindAR and A-Frame Libraries -->
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <script src="node_modules/mind-ar/dist/mindar-image-aframe.prod.js"></script>
-    
-    <!-- External CSS -->
-    <link rel="stylesheet" href="{% static 'css/experience.css' %}">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>{{ title|default:experience.title }} – AR Experience</title>
+
+  <!-- A-Frame + MindAR -->
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+  <style>
+    :root{--ok:#00e676;--warn:#ffb300;--err:#ff1744;--info:#40c4ff;--accent:#00ff88;--panel:rgba(0,0,0,.85);}
+
+    html,body{margin:0;height:100%;color:#fff;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    a-scene{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important}
+    .loading{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.9);z-index:2000}
+    .loading.hidden{display:none}
+    .card{background:var(--panel);border-radius:12px;padding:16px 20px;min-width:240px;text-align:center}
+    .panel{position:fixed;top:16px;left:16px;z-index:1000;background:var(--panel);border-radius:10px;padding:12px 14px;font-size:13px;min-width:200px}
+    .row{display:flex;align-items:center;gap:8px;margin:4px 0}
+    .dot{width:10px;height:10px;border-radius:50%;background:#777}
+    .active{background:var(--ok)}.ready{background:var(--info)}.searching{background:var(--warn);animation:pulse 1.1s infinite}.error{background:var(--err)}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    .instructions{position:fixed;top:16px;right:16px;z-index:1000;background:var(--panel);border-radius:12px;padding:14px 16px;font-size:14px;max-width:280px}
+    .instructions h3{margin:0 0 6px;font-size:15px;color:var(--accent)}
+    .hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--panel);border-radius:20px;padding:10px 16px;font-size:14px}
+    .banner{position:fixed;top:0;left:0;right:0;z-index:3000;background:#b00020;color:#fff;padding:10px 14px;font-size:13px;display:none}
+    .banner code{background:rgba(255,255,255,.15);padding:2px 4px;border-radius:4px}
+  </style>
 </head>
 <body>
-    <!-- Loading Screen -->
-    <div class="loading-overlay" id="loading">
-        <div class="spinner"></div>
-        <div>🎥 Initializing AR Camera...</div>
-        <div class="loading-subtitle">
-            Grant camera permission when prompted
-        </div>
+  <!-- Error banner -->
+  <div id="error-banner" class="banner"></div>
+
+  <!-- Loading overlay -->
+  <div id="loading" class="loading">
+    <div class="card">
+      <div>🎥 Initializing camera…</div>
+      <div style="font-size:12px;opacity:.8;margin-top:6px">Please allow camera permission</div>
     </div>
-    
-    <!-- Minimal Status Panel -->
-    <div class="status-panel">
-        <div class="status-item">
-            <div class="status-dot" id="camera-dot"></div>
-            Camera: <span id="camera-status">Starting...</span>
-        </div>
-        <div class="status-item">
-            <div class="status-dot" id="tracking-dot"></div>
-            Tracking: <span id="tracking-status">Initializing...</span>
-        </div>
-        {% if experience.video %}
-        <div class="status-item">
-            <div class="status-dot" id="video-dot"></div>
-            Video: <span id="video-status">Ready</span>
-        </div>
-        {% endif %}
-    </div>
-    
-    <!-- Instructions -->
-    <div class="instructions">
-        <div class="instruction-title">🎯 Point at Marker</div>
-        <div class="instruction-text">Aim your camera at the marker image to see AR content</div>
-    </div>
-    
-    <!-- MindAR Scene with Auto Camera Feed -->
-    <a-scene
-        id="ar-scene"
-        mindar-image="
-            imageTargetSrc: {{ marker_base_url }}.mind;
-            autoStart: true;
-            uiLoading: no;
-            uiError: no;
-            uiScanning: no;
-            maxTrack: 1;
-        "
-        color-space="sRGB"
-        renderer="antialias: true; alpha: true;"
-        vr-mode-ui="enabled: false"
-        device-orientation-permission-ui="enabled: false"
-        background="transparent"
-        embedded
-    >
-        <a-assets>
-            {% if experience.video %}
-            <video
-                id="ar-video"
-                src="{{ experience.video.url }}"
-                loop muted playsinline webkit-playsinline
-                crossorigin="anonymous"
-                preload="auto"
-                style="display: none;">
-            </video>
-            {% endif %}
-            
-            {% if experience.image %}
-            <img id="marker-image" src="{{ experience.image.url }}" crossorigin="anonymous">
-            {% endif %}
-        </a-assets>
-        
-        <a-camera 
-            position="0 0 0" 
-            look-controls="enabled: false"
-            wasd-controls="enabled: false">
-        </a-camera>
-        
-        {% if marker_files_exist %}
-        <a-entity mindar-image-target="targetIndex: 0" id="ar-target">
-            {% if experience.video %}
-            <a-video
-                id="video-overlay"
-                src="#ar-video"
-                position="0 0 0.1"
-                rotation="-90 0 0"
-                width="1.6"
-                height="0.9"
-                opacity="0"
-                visible="false">
-            </a-video>
-            {% else %}
-            <!-- Fallback AR content -->
-            <a-box
-                position="0 0 0.1"
-                rotation="-90 0 0"
-                width="1.6" height="0.9" depth="0.01"
-                color="#00ff88"
-                opacity="0.8"
-                material="transparent: true;">
-            </a-box>
-            <a-text
-                value="{{ experience.title }}"
-                position="0 0 0.12"
-                rotation="-90 0 0"
-                align="center"
-                color="white"
-                scale="0.6 0.6 0.6">
-            </a-text>
-            {% endif %}
-        </a-entity>
-        {% endif %}
-    </a-scene>
-    
-    <!-- Pass Django variables to JavaScript -->
-    <script>
-        // Global configuration
-        window.ARExperience = {
-            slug: "{{ experience.slug }}",
-            title: "{{ experience.title }}",
-            markerUrl: "{{ marker_base_url }}.mind",
-            videoUrl: "{% if experience.video %}{{ experience.video.url }}{% endif %}",
-            imageUrl: "{% if experience.image %}{{ experience.image.url }}{% endif %}",
-            websocketUrl: "{{ websocket_url|default:'' }}",
-            debug: {% if debug %}true{% else %}false{% endif %},
-            hasVideo: {% if experience.video %}true{% else %}false{% endif %},
-            hasImage: {% if experience.image %}true{% else %}false{% endif %},
-            markerExists: {% if marker_files_exist %}true{% else %}false{% endif %}
-        };
-        
-        console.log('🎯 AR Experience Config:', window.ARExperience);
-    </script>
-    
-    <!-- External JavaScript -->
-    <script src="{% static 'js/experience.js' %}"></script>
+  </div>
+
+  <!-- Status panel -->
+  <div class="panel">
+    <div class="row"><span id="camera-dot" class="dot"></span> Camera: <span id="camera-status">Starting…</span></div>
+    <div class="row"><span id="tracking-dot" class="dot"></span> Tracking: <span id="tracking-status">Initializing…</span></div>
+    {% if experience.video %}
+    <div class="row"><span id="video-dot" class="dot"></span> Video: <span id="video-status">Idle</span></div>
+    {% endif %}
+  </div>
+
+  <!-- Instructions -->
+  <div class="instructions">
+    <h3>🎯 Point at the marker</h3>
+    <div>Aim your camera at the marker to reveal AR content.</div>
+    <div style="font-size:12px;opacity:.7;margin-top:6px">Ensure good lighting and keep the marker fully in frame.</div>
+  </div>
+
+  <!-- Hint -->
+  <div id="marker-hint" class="hint">📱 Move closer to the marker</div>
+
+  {% comment %}
+    We pass the exact marker URL (MEDIA) to JS and load it ourselves.
+    Example: /media/markers/jeeva/jeeva.mind
+  {% endcomment %}
+{% with slug=title|default:experience.title|slugify %}
+<a-scene
+  id="ar-scene"
+  embedded
+  mindar-image="autoStart: false; uiLoading: no; uiError: no; uiScanning: no;"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false"
+  loading-screen="enabled: false"
+  data-marker-url="/media/markers/{{ slug }}/{{ slug }}.mind"
+>
+  <a-assets timeout="15000">
+    {% if experience.video %}
+      <video id="ar-video" src="{{ experience.video.url }}" loop muted playsinline
+             webkit-playsinline crossorigin="anonymous" preload="auto"></video>
+    {% endif %}
+  </a-assets>
+
+  <a-camera position="0 0 0" look-controls="enabled:false" wasd-controls="enabled:false"></a-camera>
+
+  {% if marker_files_exist %}
+  <a-entity mindar-image-target="targetIndex: 0">
+    {% if experience.video %}
+      <a-video src="#ar-video" position="0 0 0.1" rotation="-90 0 0"
+               width="1.6" height="0.9" opacity="0" visible="false"></a-video>
+    {% else %}
+      <a-box position="0 0 0.1" rotation="-90 0 0" width="1.6" height="0.9"
+             depth="0.01" color="#00ff88" opacity="0.8"></a-box>
+      <a-text value="{{ experience.title }}" position="0 0 0.12"
+              rotation="-90 0 0" align="center" color="white"
+              scale="0.6 0.6 0.6"></a-text>
+    {% endif %}
+  </a-entity>
+  {% endif %}
+</a-scene>
+{% endwith %}
+
+  <script src="{% static 'js/experience.js' %}"></script>
 </body>
 </html>

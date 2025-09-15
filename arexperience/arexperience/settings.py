@@ -10,12 +10,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-hfrhzp0c872fe@&22sa^2sjw0lxjsgh86-rikmj4^npcu08h59"
 DEBUG = True
 
-ALLOWED_HOSTS = [
-    "127.0.0.1",
-    "localhost", 
-    ".ngrok-free.app",
-    "carpet-info-plates-satisfactory.trycloudflare.com"
-]
+ALLOWED_HOSTS = ["*"]
+#  "   "127.0.0.1",
+#     "localhost", 
+#     ".ngrok-free.app",
+#     "notifications-janet-consist-now.trycloudflare.com"
+# ]
 
 # ==============================================================================
 # APPLICAT/weather-spa-herein-coupled.trycloudflare.comIONS
@@ -44,6 +44,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    
 ]
 
 ROOT_URLCONF = "arexperience.urls"
@@ -110,7 +111,10 @@ USE_TZ = True
 # STATIC FILES CONFIGURATION
 # ==============================================================================
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+    Path("D:/git/AR-Experience-/arexperience/node_modules"),  # Full path
+]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # ==============================================================================

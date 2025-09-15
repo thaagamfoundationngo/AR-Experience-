@@ -18,7 +18,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'arexperience.settings')
 def debug_markers(request, slug):
     """Debug view to check marker file status"""
     # Fetch the experience by its slug
-    experience = get_object_or_404(ARExperience, slug=slug)
+    experience = get_object_or_404(experience, slug=slug)
     
     # Path to the markers folder
     marker_dir = finders.find(f'markers/{slug}')

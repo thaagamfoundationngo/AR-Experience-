@@ -22,13 +22,12 @@ urlpatterns = [
     
     # Alternative AR viewers for compatibility
     path('ar/<slug:slug>/', views.ar_experience_by_slug, name='ar_experience_slug'),
-    path('ar/<int:experience_id>/', views.ar_experience_view, name='ar_experience'),
     
     # ============================================================================
     # BROWSER-BASED MINDAR COMPILER
     # ============================================================================
-    path('browser-mindar-compiler/', views.browser_mindar_compiler, name='browser_mindar_compiler'),
-    path('save-browser-mindar-target/', views.save_browser_mindar_target, name='save_browser_mindar_target'),
+    #path('browser-mindar-compiler/', views.browser_mindar_compiler, name='browser_mindar_compiler'),
+    #path('save-browser-mindar-target/', views.save_browser_mindar_target, name='save_browser_mindar_target'),
     
     # ============================================================================
     # API ENDPOINTS
@@ -38,17 +37,5 @@ urlpatterns = [
     
     # Backend tracking validation APIs
     path('api/validate-tracking/<slug:slug>/', views.validate_tracking_api, name='validate_tracking_api'),
-    path('api/start-realtime-tracking/<slug:slug>/', views.start_realtime_tracking_api, name='start_realtime_tracking_api'),
-    path('api/stop-realtime-tracking/<slug:slug>/', views.stop_realtime_tracking_api, name='stop_realtime_tracking_api'),
-    
-    # ============================================================================
-    # UTILITY ENDPOINTS
-    # ============================================================================
-    path('qr/<slug:slug>/', views.qr_view, name='qr_view'),
-    
-    # ============================================================================
-    # DEBUG ENDPOINTS (Development only)
-    # ============================================================================
-    path('debug/markers/<slug:slug>/', views.debug_markers, name='debug_markers'),
     
 ]
