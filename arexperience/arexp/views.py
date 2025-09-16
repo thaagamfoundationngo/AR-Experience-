@@ -82,7 +82,7 @@ from struct import pack
 
 def generate_mindar_marker_fixed(image_path, output_path):
     """CORRUPTION-FREE .mind file generation - guaranteed to work with proper binary format"""
-    compiler = ZI()
+    #compiler = ZI()
     try:
         logger.info(f"🔧 Starting .mind file generation for: {image_path}")
         
