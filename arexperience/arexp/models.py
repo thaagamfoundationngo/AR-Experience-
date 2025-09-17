@@ -145,6 +145,14 @@ class Upload(models.Model):
 
 class ARExperience(models.Model):
     """AR Experience model with NFT file storage"""
+    user = models.ForeignKey(
+    settings.AUTH_USER_MODEL,
+    on_delete=models.CASCADE,
+    null=True,       # ✅ Allow NULL - no user required!
+    blank=True,      # ✅ Allow empty in forms
+    editable=False,  # ✅ Hide from admin/forms
+    help_text="Optional user who created this AR experience"
+)
     
     title = models.CharField(max_length=200, help_text="Name of the AR experience")
     slug = models.SlugField(max_length=50, unique=True, blank=True)
@@ -210,12 +218,14 @@ class ARExperience(models.Model):
     )
     
     marker_generated = models.BooleanField(default=False, help_text="Whether marker files have been generated")
+    view_count = models.IntegerField(default=0, help_text="Number of times this experience has been viewed")
+    visibility = models.CharField(max_length=20, default='public', help_text="Visibility setting for the experience")
     
     class Meta:
         ordering = ['-created_at']
         verbose_name = "AR Experience"
         verbose_name_plural = "AR Experiences"
-    
+        #exclude = ['user']
     def __str__(self):
         return self.title
     

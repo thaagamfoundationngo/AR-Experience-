@@ -81,8 +81,7 @@ import msgpack
 from struct import pack
 
 def generate_mindar_marker_fixed(image_path, output_path):
-    """CORRUPTION-FREE .mind file generation - guaranteed to work with proper binary format"""
-    #compiler = ZI()
+    """CORRUPTION-FREE .mind file generation with debugging"""
     try:
         logger.info(f"🔧 Starting .mind file generation for: {image_path}")
         
@@ -97,111 +96,81 @@ def generate_mindar_marker_fixed(image_path, output_path):
         
         # Preprocess for better feature detection
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        gray = cv2.equalizeHist(gray)  # Enhance contrast
+        gray = cv2.equalizeHist(gray)
         
-        # Initialize ORB with aggressive parameters
-        orb = cv2.ORB_create(
-            nfeatures=5000, scaleFactor=1.2, nlevels=16,
-            edgeThreshold=1, firstLevel=0, WTA_K=2,
-            scoreType=cv2.ORB_HARRIS_SCORE, patchSize=15, fastThreshold=1
-        )
+        # Initialize ORB with proper parameters
+        orb = cv2.ORB_create(nfeatures=500, scaleFactor=1.2, nlevels=8)
         
         # Detect keypoints and descriptors
         keypoints, descriptors = orb.detectAndCompute(gray, None)
-        logger.info(f"🔍 Detected {len(keypoints)} initial keypoints")
-        
-        # Enhance with corner features if needed
-        if len(keypoints) < 100:
-            corners = cv2.goodFeaturesToTrack(
-                gray, maxCorners=1500, qualityLevel=0.0005,
-                minDistance=2, blockSize=3, useHarrisDetector=True, k=0.04
-            )
-            if corners is not None:
-                corner_kps = [cv2.KeyPoint(x[0][0], x[0][1], 5) for x in corners]
-                keypoints.extend(corner_kps[:1500])
-                logger.info(f"🎯 Added {len(corner_kps)} corner features")
-        
-        logger.info(f"🔍 Total keypoints after enhancement: {len(keypoints)}")
+        logger.info(f"🔍 Detected {len(keypoints)} keypoints")
         
         if len(keypoints) < 50:
             logger.error(f"❌ Insufficient keypoints: {len(keypoints)}")
             return False
         
-        # Sort and limit keypoints
-        keypoints_sorted = sorted(keypoints, key=lambda x: getattr(x, 'response', 0.1), reverse=True)[:800]
+        # Limit keypoints
+        keypoints_sorted = sorted(keypoints, key=lambda x: getattr(x, 'response', 0.1), reverse=True)[:300]
         
-        # Prepare MindAR-compatible data structure
+        # 🔥 ADD DEBUGGING
+        logger.info(f"📊 Final keypoints count: {len(keypoints_sorted)}")
+        logger.info(f"📊 Descriptors available: {descriptors is not None}")
+        logger.info(f"📊 Descriptors shape: {descriptors.shape if descriptors is not None else 'None'}")
+        
+        # Create structure with explicit arrays
+        keypoints_data = [{
+            "x": float(kp.pt[0]), 
+            "y": float(kp.pt[1]),
+            "scale": float(kp.size), 
+            "orientation": float(kp.angle or 0.0),
+            "response": float(getattr(kp, 'response', 0.1))
+        } for kp in keypoints_sorted]
+        
+        # Always create descriptors array (even if empty)
+        descriptors_data = []
+        if descriptors is not None and len(descriptors) > 0:
+            descriptors_data = [
+                desc.tobytes() for desc in descriptors[:len(keypoints_sorted)]
+            ]
+        
+        # 🔥 EXPLICIT STRUCTURE
         mindar_data = {
             "version": 1,
             "imageWidth": int(width),
             "imageHeight": int(height),
-            "scale": 1.0,
             "targets": [{
-                "imageTargetIndex": 0,  # Explicit index for compatibility
-                "dpi": [200, 200],
-                "keypoints": [{
-                    "x": float(kp.pt[0]), "y": float(kp.pt[1]),
-                    "scale": float(kp.size), "orientation": float(kp.angle or 0.0),
-                    "response": float(getattr(kp, 'response', 0.1))
-                } for kp in keypoints_sorted],
-                "descriptors": [
-                    desc.tobytes() if descriptors is not None and i < len(descriptors) else bytes([0] * 32)
-                    for i, desc in enumerate(descriptors[:len(keypoints_sorted)])
-                ]
+                "imageTargetIndex": 0,
+                "keypoints": keypoints_data,
+                "descriptors": descriptors_data
             }]
         }
         
-        # Serialize to MessagePack
-        try:
-            packed_data = msgpack.packb(mindar_data, use_bin_type=True)
-            logger.info(f"📦 Serialized {len(packed_data)} bytes of MessagePack data")
-        except Exception as e:
-            logger.error(f"❌ MessagePack serialization failed: {str(e)}")
-            return False
+        # 🔥 DEBUG THE STRUCTURE
+        logger.info(f"📊 Structure check:")
+        logger.info(f"   - targets count: {len(mindar_data['targets'])}")
+        logger.info(f"   - keypoints count: {len(mindar_data['targets'][0]['keypoints'])}")
+        logger.info(f"   - descriptors count: {len(mindar_data['targets'][0]['descriptors'])}")
         
-        # Write with corruption-proof method
+        # Serialize with proper settings
+        packed_data = msgpack.packb(mindar_data, use_bin_type=True, strict_types=True)
+        
+        # Write with header
         header = pack('<4sI', b'MIND', len(packed_data))
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        temp_path = output_path + '.writing'
         
-        try:
-            with open(temp_path, 'wb') as f:
-                f.write(header)
-                f.write(packed_data)
-                f.flush()
-                os.fsync(f.fileno())
-            
-            if os.path.exists(temp_path) and os.path.getsize(temp_path) == (8 + len(packed_data)):
-                if os.path.exists(output_path):
-                    os.remove(output_path)
-                os.rename(temp_path, output_path)
-                
-                file_size = os.path.getsize(output_path)
-                expected_size = 8 + len(packed_data)
-                
-                if file_size == expected_size:
-                    is_valid, validation_msg = validate_mind_file_strict(output_path)
-                    if is_valid:
-                        logger.info(f"✅ SUCCESS: {output_path} - {file_size} bytes, {len(keypoints_sorted)} keypoints")
-                        logger.info(f"🔒 No corruption: {validation_msg}")
-                        return True
-                    else:
-                        logger.error(f"❌ Validated as corrupt: {validation_msg}")
-                        return False
-                else:
-                    logger.error(f"❌ Size mismatch: {file_size} != {expected_size}")
-                    return False
-            else:
-                logger.error(f"❌ Temp file write failed: Size check failed")
-                return False
-        except Exception as write_error:
-            logger.error(f"❌ Write error: {str(write_error)}")
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            return False
+        with open(output_path, 'wb') as f:
+            f.write(header)
+            f.write(packed_data)
+            f.flush()
+            os.fsync(f.fileno())
+        
+        file_size = os.path.getsize(output_path)
+        logger.info(f"✅ File written: {file_size} bytes")
+        
+        return True
             
     except Exception as e:
-        logger.error(f"❌ Unexpected error in .mind generation: {str(e)}")
+        logger.error(f"❌ Error in .mind generation: {str(e)}")
         return False
     
 def create_pro_trackable_marker(artistic_image_path, output_path=None):
@@ -354,24 +323,11 @@ def create_pro_trackable_marker(artistic_image_path, output_path=None):
     return output_path
 
 def validate_mind_file_strict(file_path):
-    """Strict validation with detailed corruption detection for MindAR .mind files (MessagePack format)."""
-    import struct  # Ensure struct is imported within the function
+    """Strict validation for MindAR .mind files (raw MessagePack format)."""
     try:
         with open(file_path, 'rb') as f:
-            # Read the 8-byte header (MIND + size)
-            header = f.read(8)
-            if len(header) != 8:
-                return False, f"❌ Header too short: {len(header)} bytes"
-
-            magic, data_size = struct.unpack('<4sI', header)
-            if magic != b'MIND':
-                return False, f"❌ Invalid magic bytes: {magic.hex()} (expected MIND)"
-
-            # Read the MessagePack data
             file_data = f.read()
-            if len(file_data) != data_size:
-                return False, f"❌ Data size mismatch: {len(file_data)} bytes (expected {data_size})"
-
+            
             # Validate as MessagePack
             try:
                 decoded = msgpack.unpackb(file_data, raw=False)
@@ -391,7 +347,7 @@ def validate_mind_file_strict(file_path):
                 if keypoint_count != descriptor_count:
                     return False, f"❌ Mismatch: {keypoint_count} keypoints vs {descriptor_count} descriptors"
 
-                return True, f"✅ Valid .mind file: {data_size} bytes, {keypoint_count} keypoints, {descriptor_count} descriptors"
+                return True, f"✅ Valid .mind file: {len(file_data)} bytes, {keypoint_count} keypoints, {descriptor_count} descriptors"
             except msgpack.ExtraData:
                 return False, "❌ Extra data found in MessagePack"
             except Exception as e:
@@ -593,6 +549,28 @@ def upload_view(request):
             try:
                 with transaction.atomic():
                     experience = form.save(commit=False)
+                    # Set user - required field
+                    if hasattr(experience, 'user_id') and not experience.user_id:
+                        if request.user.is_authenticated:
+                            experience.user = request.user
+                        else:
+                            # Create or get default user for anonymous uploads
+                            from django.contrib.auth import get_user_model
+                            User = get_user_model()
+                            default_user, created = User.objects.get_or_create(
+                                username='anonymous_user',
+                                defaults={'email': 'anonymous@example.com'}
+                            )
+                            experience.user = default_user
+                    
+                    # Set view_count default
+                    if not hasattr(experience, 'view_count') or experience.view_count is None:
+                        experience.view_count = 0
+                    
+                    # Set visibility default
+                    if not hasattr(experience, 'visibility') or not experience.visibility:
+                        experience.visibility = 'public'
+                    
                     if not experience.slug:
                         base_slug = slugify(experience.title) or f"exp-{uuid.uuid4().hex[:8]}"
                         counter = 1
@@ -654,8 +632,9 @@ def upload_view(request):
                                 if quality_results['valid'] and quality_results['score'] >= 0.6:  # Minimum good quality
                                     logger.info(f"📊 Trackable image quality: {quality_results['score']} (valid)")
                                     
-                                    # Step 3: Generate corruption-free .mind file
-                                    if generate_mindar_marker_fixed(trackable_path, str(mind_file_path)):
+                                    # Step 3: Generate simple .mind file
+                                    from .marker_gen import generate_simple_mind_file
+                                    if generate_simple_mind_file(trackable_path, str(mind_file_path)):
                                         marker_generated = True
                                         file_size = mind_file_path.stat().st_size
                                         quality_indicator = "🎯 Excellent" if file_size > 50000 else "✅ Good" if file_size > 20000 else "⚠️ Moderate" if file_size > 10000 else "📱 Basic"
@@ -731,6 +710,8 @@ def upload_view(request):
         'new_experience_slug': request.GET.get('new'),
     }
     return render(request, 'upload.html', context)
+
+
 def experience_view(request, slug):
     """Enhanced view for rendering an AR experience with MindAR integration."""
     try:

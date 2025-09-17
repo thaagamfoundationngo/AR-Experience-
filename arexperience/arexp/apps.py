@@ -7,4 +7,3 @@ class ArexpConfig(AppConfig):
 
     def ready(self):
         from . import signals  # register signal handlers
-
