@@ -4,103 +4,305 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <title>{{ title|default:experience.title }} – AR Experience</title>
-
-  <!-- A-Frame + MindAR -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-
+  <title>{{ experience.title }} – Python AR Experience</title>
+  
   <style>
-    :root{--ok:#00e676;--warn:#ffb300;--err:#ff1744;--info:#40c4ff;--accent:#00ff88;--panel:rgba(0,0,0,.85);}
-
-    html,body{margin:0;height:100%;color:#fff;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
-    a-scene{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important}
-    .loading{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.9);z-index:2000}
-    .loading.hidden{display:none}
-    .card{background:var(--panel);border-radius:12px;padding:16px 20px;min-width:240px;text-align:center}
-    .panel{position:fixed;top:16px;left:16px;z-index:1000;background:var(--panel);border-radius:10px;padding:12px 14px;font-size:13px;min-width:200px}
-    .row{display:flex;align-items:center;gap:8px;margin:4px 0}
-    .dot{width:10px;height:10px;border-radius:50%;background:#777}
-    .active{background:var(--ok)}.ready{background:var(--info)}.searching{background:var(--warn);animation:pulse 1.1s infinite}.error{background:var(--err)}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-    .instructions{position:fixed;top:16px;right:16px;z-index:1000;background:var(--panel);border-radius:12px;padding:14px 16px;font-size:14px;max-width:280px}
-    .instructions h3{margin:0 0 6px;font-size:15px;color:var(--accent)}
-    .hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--panel);border-radius:20px;padding:10px 16px;font-size:14px}
-    .banner{position:fixed;top:0;left:0;right:0;z-index:3000;background:#b00020;color:#fff;padding:10px 14px;font-size:13px;display:none}
-    .banner code{background:rgba(255,255,255,.15);padding:2px 4px;border-radius:4px}
+    /* Your existing styles... */
+    
+    /* Camera Stream Styles */
+    .camera-container {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      z-index: 1;
+    }
+    
+    #cameraVideo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    #processingCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    
+    .camera-controls {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1001;
+      display: flex;
+      gap: 10px;
+    }
   </style>
 </head>
 <body>
-  <!-- Error banner -->
-  <div id="error-banner" class="banner"></div>
-
-  <!-- Loading overlay -->
-  <div id="loading" class="loading">
-    <div class="card">
-      <div>🎥 Initializing camera…</div>
-      <div style="font-size:12px;opacity:.8;margin-top:6px">Please allow camera permission</div>
-    </div>
+  <!-- Your existing UI elements... -->
+  
+  <!-- Camera Container -->
+  <div id="camera-container" class="camera-container">
+    <video id="cameraVideo" autoplay muted playsinline></video>
+    <canvas id="processingCanvas"></canvas>
   </div>
-
-  <!-- Status panel -->
-  <div class="panel">
-    <div class="row"><span id="camera-dot" class="dot"></span> Camera: <span id="camera-status">Starting…</span></div>
-    <div class="row"><span id="tracking-dot" class="dot"></span> Tracking: <span id="tracking-status">Initializing…</span></div>
-    {% if experience.video %}
-    <div class="row"><span id="video-dot" class="dot"></span> Video: <span id="video-status">Idle</span></div>
-    {% endif %}
+  
+  <!-- Camera Controls -->
+  <div class="camera-controls">
+    <button id="startCamera" class="btn">📹 Start Camera</button>
+    <button id="stopCamera" class="btn" style="display:none;">⏹️ Stop Camera</button>
+    <button id="switchCamera" class="btn">🔄 Switch</button>
   </div>
-
-  <!-- Instructions -->
-  <div class="instructions">
-    <h3>🎯 Point at the marker</h3>
-    <div>Aim your camera at the marker to reveal AR content.</div>
-    <div style="font-size:12px;opacity:.7;margin-top:6px">Ensure good lighting and keep the marker fully in frame.</div>
-  </div>
-
-  <!-- Hint -->
-  <div id="marker-hint" class="hint">📱 Move closer to the marker</div>
-
-  {% comment %}
-    We pass the exact marker URL (MEDIA) to JS and load it ourselves.
-    Example: /media/markers/jeeva/jeeva.mind
-  {% endcomment %}
-{% with slug=title|default:experience.title|slugify %}
-<a-scene
-  id="ar-scene"
-  embedded
-  mindar-image="autoStart: false; uiLoading: no; uiError: no; uiScanning: no;"
-  vr-mode-ui="enabled: false"
-  device-orientation-permission-ui="enabled: false"
-  loading-screen="enabled: false"
-  data-marker-url="/media/markers/{{ slug }}/{{ slug }}.mind"
->
-  <a-assets timeout="15000">
-    {% if experience.video %}
-      <video id="ar-video" src="{{ experience.video.url }}" loop muted playsinline
-             webkit-playsinline crossorigin="anonymous" preload="auto"></video>
-    {% endif %}
-  </a-assets>
-
-  <a-camera position="0 0 0" look-controls="enabled:false" wasd-controls="enabled:false"></a-camera>
-
-  {% if marker_files_exist %}
-  <a-entity mindar-image-target="targetIndex: 0">
-    {% if experience.video %}
-      <a-video src="#ar-video" position="0 0 0.1" rotation="-90 0 0"
-               width="1.6" height="0.9" opacity="0" visible="false"></a-video>
-    {% else %}
-      <a-box position="0 0 0.1" rotation="-90 0 0" width="1.6" height="0.9"
-             depth="0.01" color="#00ff88" opacity="0.8"></a-box>
-      <a-text value="{{ experience.title }}" position="0 0 0.12"
-              rotation="-90 0 0" align="center" color="white"
-              scale="0.6 0.6 0.6"></a-text>
-    {% endif %}
-  </a-entity>
-  {% endif %}
-</a-scene>
-{% endwith %}
-
-  <script src="{% static 'js/experience.js' %}"></script>
+  
+  <!-- Configuration Script -->
+  <script>
+    window.AR_CONFIG = {
+        slug: '{{ experience.slug }}',
+        pythonArReady: {{ python_ar_ready|yesno:"true,false" }},
+        overlaySettings: {
+            scale: {{ experience.overlay_scale|default:1.0 }},
+            opacity: {{ experience.overlay_opacity|default:0.8 }},
+            sensitivity: {{ experience.detection_sensitivity|default:0.7 }}
+        },
+        processingMethod: '{{ experience.processing_method|default:"python_webrtc" }}',
+        featureCount: {{ experience.feature_count|default:0 }},
+        trackingQuality: {{ experience.tracking_quality|default:0.0 }}
+    };
+  </script>
+  
+  <!-- WebRTC AR Script -->
+  <script>
+    // WebRTC Camera + Python AR Processing
+    class WebRTCPythonAR {
+        constructor() {
+            this.video = null;
+            this.canvas = null;
+            this.ctx = null;
+            this.stream = null;
+            this.isProcessing = false;
+            this.frameCount = 0;
+        }
+        
+        async init() {
+            this.video = document.getElementById('cameraVideo');
+            this.canvas = document.getElementById('processingCanvas');
+            this.ctx = this.canvas.getContext('2d');
+            
+            // Set canvas size to match video
+            this.canvas.width = 640;
+            this.canvas.height = 480;
+        }
+        
+        async startCamera() {
+            try {
+                console.log('🎥 Starting WebRTC camera...');
+                
+                this.stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'environment' // Back camera on mobile
+                    },
+                    audio: false
+                });
+                
+                this.video.srcObject = this.stream;
+                await this.video.play();
+                
+                console.log('✅ Camera started successfully');
+                this.startProcessing();
+                
+                // Update UI
+                document.getElementById('startCamera').style.display = 'none';
+                document.getElementById('stopCamera').style.display = 'inline-block';
+                
+                // Update status
+                this.updateStatus('stream', 'Active', 'active');
+                
+            } catch (error) {
+                console.error('❌ Camera access failed:', error);
+                alert('Camera access failed: ' + error.message);
+            }
+        }
+        
+        stopCamera() {
+            if (this.stream) {
+                this.stream.getTracks().forEach(track => track.stop());
+                this.stream = null;
+            }
+            
+            this.isProcessing = false;
+            this.video.srcObject = null;
+            
+            // Update UI
+            document.getElementById('startCamera').style.display = 'inline-block';
+            document.getElementById('stopCamera').style.display = 'none';
+            
+            // Update status
+            this.updateStatus('stream', 'Stopped', 'ready');
+            
+            console.log('⏹️ Camera stopped');
+        }
+        
+        startProcessing() {
+            this.isProcessing = true;
+            this.processFrame();
+        }
+        
+        processFrame() {
+            if (!this.isProcessing) return;
+            
+            try {
+                // Draw video frame to canvas
+                this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+                
+                // Add Python AR overlay
+                this.addAROverlay();
+                
+                // Send frame to Django for processing (optional)
+                if (this.frameCount % 10 === 0) { // Every 10th frame
+                    this.sendFrameToServer();
+                }
+                
+                this.frameCount++;
+                
+            } catch (error) {
+                console.error('Frame processing error:', error);
+            }
+            
+            // Continue processing
+            requestAnimationFrame(() => this.processFrame());
+        }
+        
+        addAROverlay() {
+            // Add Python AR processing indicators
+            this.ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
+            this.ctx.font = '16px monospace';
+            
+            // AR Status
+            this.ctx.fillText(`🐍 Python AR: ${window.AR_CONFIG.slug}`, 10, 30);
+            this.ctx.fillText(`Frame: ${this.frameCount}`, 10, 50);
+            this.ctx.fillText(`Method: ${window.AR_CONFIG.processingMethod}`, 10, 70);
+            this.ctx.fillText(`Quality: ${window.AR_CONFIG.trackingQuality}`, 10, 90);
+            
+            // Marker detection placeholder
+            if (this.frameCount % 60 < 30) { // Blink every 2 seconds
+                this.ctx.strokeStyle = 'lime';
+                this.ctx.lineWidth = 3;
+                this.ctx.strokeRect(200, 150, 200, 150);
+                this.ctx.fillText('🎯 Marker Area', 210, 140);
+            }
+            
+            // Video overlay simulation
+            if (window.AR_CONFIG.pythonArReady) {
+                this.ctx.fillStyle = 'rgba(255, 255, 0, 0.6)';
+                this.ctx.fillRect(250, 200, 100, 60);
+                this.ctx.fillStyle = 'black';
+                this.ctx.fillText('📹 Video', 260, 235);
+            }
+        }
+        
+        async sendFrameToServer() {
+            try {
+                // Get image data from canvas
+                const imageData = this.canvas.toDataURL('image/jpeg', 0.7);
+                
+                // Send to Django API for processing
+                const response = await fetch(`/api/process-ar-frame/${window.AR_CONFIG.slug}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                    },
+                    body: JSON.stringify({
+                        frame: imageData,
+                        frame_count: this.frameCount
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    // Handle AR processing result
+                    console.log('AR processing result:', result);
+                }
+                
+            } catch (error) {
+                console.error('Server processing error:', error);
+            }
+        }
+        
+        updateStatus(kind, label, cls) {
+            const dot = document.getElementById(kind + "-dot");
+            const txt = document.getElementById(kind + "-status");
+            if (dot) dot.className = "dot " + (cls || "");
+            if (txt) txt.textContent = label;
+        }
+        
+        async switchCamera() {
+            if (this.stream) {
+                const videoTrack = this.stream.getVideoTracks()[0];
+                const currentFacingMode = videoTrack.getSettings().facingMode;
+                
+                this.stopCamera();
+                
+                // Switch between front and back camera
+                const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+                
+                setTimeout(async () => {
+                    try {
+                        this.stream = await navigator.mediaDevices.getUserMedia({
+                            video: { 
+                                width: { ideal: 640 },
+                                height: { ideal: 480 },
+                                facingMode: newFacingMode
+                            },
+                            audio: false
+                        });
+                        
+                        this.video.srcObject = this.stream;
+                        await this.video.play();
+                        this.startProcessing();
+                        
+                        document.getElementById('startCamera').style.display = 'none';
+                        document.getElementById('stopCamera').style.display = 'inline-block';
+                        
+                    } catch (error) {
+                        console.error('Camera switch failed:', error);
+                        alert('Camera switch failed: ' + error.message);
+                    }
+                }, 500);
+            }
+        }
+    }
+    
+    // Initialize AR system
+    const pythonAR = new WebRTCPythonAR();
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+        await pythonAR.init();
+        
+        // Button event listeners
+        document.getElementById('startCamera').onclick = () => pythonAR.startCamera();
+        document.getElementById('stopCamera').onclick = () => pythonAR.stopCamera();
+        document.getElementById('switchCamera').onclick = () => pythonAR.switchCamera();
+        
+        console.log('🎯 WebRTC Python AR system ready');
+    });
+    
+    // Auto-start camera if supported
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        console.log('📱 WebRTC supported - ready for camera access');
+    } else {
+        console.error('❌ WebRTC not supported in this browser');
+        alert('Your browser does not support camera access');
+    }
+  </script>
 </body>
 </html>

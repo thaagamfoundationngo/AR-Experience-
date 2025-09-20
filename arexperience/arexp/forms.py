@@ -1,70 +1,102 @@
-#forms.py
+# arexp/forms.py - FIXED TO MATCH YOUR TEMPLATE
 from django import forms
-from .models import ARExperience
+from .models import ARExperience, Upload
 
 class ARExperienceForm(forms.ModelForm):
-    """Form for creating and editing AR experiences"""
+    """Simplified form matching your current template"""
     
     class Meta:
         model = ARExperience
-        fields = ['title', 'description', 'image', 'video', 'model_file', 'content_text', 'content_url', 'marker_size']
+        fields = ['title', 'description', 'image', 'video', 'marker_size']
+        
+        widgets = {
+            'title': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter AR experience title',
+                'required': True
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Describe your AR experience (optional)'
+            }),
+            'image': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': 'image/*',
+                'required': True
+            }),
+            'video': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': 'video/*',
+                'required': True
+            }),
+            'marker_size': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0.1',
+                'max': '5.0',
+                'step': '0.1',
+                'value': '1.0'
+            })
+        }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # Set the default value for marker_size if it's not provided
-        if not self.instance.pk and not self.instance.marker_size:  # If instance is new and marker_size is not provided
-            self.instance.marker_size = 1.0  # default value for marker_size
-
-        # Customize field widgets
-        self.fields['title'].widget.attrs.update({'class': 'form-control', 'placeholder': 'Enter experience title...'})
-        self.fields['description'].widget.attrs.update({'class': 'form-control', 'rows': 3, 'placeholder': 'Describe your AR experience...'})
-        self.fields['image'].widget.attrs.update({'class': 'form-control-file', 'accept': 'image/*'})
-        self.fields['video'].widget.attrs.update({'class': 'form-control-file', 'accept': 'video/mp4,video/webm,video/quicktime'})
-        self.fields['model_file'].widget.attrs.update({'class': 'form-control-file', 'accept': '.glb,.gltf,.obj'})
-        self.fields['content_text'].widget.attrs.update({'class': 'form-control', 'rows': 2, 'placeholder': 'Additional text content...'})
-        self.fields['content_url'].widget.attrs.update({'class': 'form-control', 'placeholder': 'https://...'})
-        self.fields['marker_size'].widget.attrs.update({'class': 'form-control', 'min': '0.1', 'max': '10', 'step': '0.1'})
-
-        # Make certain fields required
-        self.fields['title'].required = True
-        self.fields['image'].required = True
-
-        # Add help text for fields
-        self.fields['image'].help_text = "Upload a high-contrast image that works well as an AR marker"
-        self.fields['model_file'].help_text = "Optional: Upload a 3D model to display in AR"
-        self.fields['marker_size'].help_text = "Size of the AR content (1.0 = normal size)"
-    
     def clean_image(self):
         """Validate uploaded image"""
         image = self.cleaned_data.get('image')
-        
         if image:
-            # Check file size (limit to 10MB)
+            # Check file size (max 10MB)
             if image.size > 10 * 1024 * 1024:
                 raise forms.ValidationError("Image file too large. Maximum size is 10MB.")
             
-            # Check file type
-            allowed_types = ['image/jpeg', 'image/png', 'image/jpg']
-            if hasattr(image, 'content_type') and image.content_type not in allowed_types:
-                raise forms.ValidationError("Only JPEG and PNG images are allowed.")
-        
+            # Check image format
+            if not image.content_type.startswith('image/'):
+                raise forms.ValidationError("Please upload a valid image file.")
         return image
     
-    def clean_model_file(self):
-        """Validate uploaded 3D model"""
-        model_file = self.cleaned_data.get('model_file')
-        
-        if model_file:
-            # Check file size (limit to 50MB)
-            if model_file.size > 50 * 1024 * 1024:
-                raise forms.ValidationError("Model file too large. Maximum size is 50MB.")
+    def clean_video(self):
+        """Validate uploaded video"""
+        video = self.cleaned_data.get('video')
+        if video:
+            # Check file size (max 50MB)
+            if video.size > 50 * 1024 * 1024:
+                raise forms.ValidationError("Video file too large. Maximum size is 50MB.")
             
-            # Check file extension
-            allowed_extensions = ['.glb', '.gltf', '.obj']
-            file_extension = model_file.name.lower().split('.')[-1] if '.' in model_file.name else ''
+            # Check video format
+            allowed_types = ['video/mp4', 'video/quicktime', 'video/webm']
+            if video.content_type not in allowed_types:
+                raise forms.ValidationError("Please upload MP4, MOV, or WebM video files only.")
+        return video
+    
+    def clean_title(self):
+        """Validate and clean title"""
+        title = self.cleaned_data.get('title')
+        if title:
+            # Remove extra whitespace
+            title = ' '.join(title.split())
             
-            if f'.{file_extension}' not in allowed_extensions:
-                raise forms.ValidationError("Only GLB, GLTF, and OBJ files are allowed.")
+            # Check length
+            if len(title) < 3:
+                raise forms.ValidationError("Title must be at least 3 characters long.")
+        return title
+
+
+class UploadForm(forms.ModelForm):
+    """Legacy upload form"""
+    
+    class Meta:
+        model = Upload
+        fields = ['target_name', 'image', 'video']
         
-        return model_file
+        widgets = {
+            'target_name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter target name'
+            }),
+            'image': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': 'image/*'
+            }),
+            'video': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': 'video/*'
+            })
+        }

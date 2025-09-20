@@ -1,41 +1,23 @@
+# arexp/urls.py - MINIMAL WORKING VERSION
 from django.urls import path
 from . import views
 
-
 urlpatterns = [
-    # ============================================================================
-    # CORE PAGES
-    # ============================================================================
+    # Core pages that exist
     path('', views.home, name='home'),
-    path('scanner/', views.scanner, name='scanner'),
     path('upload/', views.upload_view, name='upload_view'),
     
-    # ============================================================================
-    # AR EXPERIENCE VIEWERS
-    # ============================================================================
-    # Main AR Experience viewer (slug-based - RECOMMENDED)
+    # Python AR Experience
     path('x/<slug:slug>/', views.experience_view, name='experience_view'),
     
-    # Webcam AR experience
-    path('webcam/', views.webcam_ar_experience_view, name='webcam_ar_experience'),
-    path('webcam/<slug:slug>/', views.webcam_ar_experience_view, name='webcam_ar_experience_slug'),
+    # Python AR Live Stream
+    path('stream/<slug:slug>/', views.ar_camera_stream, name='ar_camera_stream'),
     
-    # Alternative AR viewers for compatibility
-    path('ar/<slug:slug>/', views.ar_experience_by_slug, name='ar_experience_slug'),
+    # API for AR status
+    path('api/ar-status/<slug:slug>/', views.python_ar_status_api, name='python_ar_status_api'),
     
-    # ============================================================================
-    # BROWSER-BASED MINDAR COMPILER
-    # ============================================================================
-    #path('browser-mindar-compiler/', views.browser_mindar_compiler, name='browser_mindar_compiler'),
-    #path('save-browser-mindar-target/', views.save_browser_mindar_target, name='save_browser_mindar_target'),
-    
-    # ============================================================================
-    # API ENDPOINTS
-    # ============================================================================
-    path('api/ar-status/<slug:slug>/', views.ar_status_api, name='ar_status_api'),
-    path('api/marker-status/<slug:slug>/', views.marker_status_api, name='marker_status_api'),  # FIXED
-    
-    # Backend tracking validation APIs
-    path('api/validate-tracking/<slug:slug>/', views.validate_tracking_api, name='validate_tracking_api'),
-    
+    # Legacy compatibility (if exists)
+    path('fetch-mind/<str:slug>/', views.fetch_mind_marker, name='fetch_mind_marker'),
+    path('api/process-ar-frame/<slug:slug>/', views.process_ar_frame_api, name='process_ar_frame_api'),
+
 ]
