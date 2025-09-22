@@ -397,119 +397,53 @@ def process_ar_frame_api(request, slug):
                         frame_gray = rgb2gray(frame_array / 255.0)
                         marker_gray = rgb2gray(marker_array / 255.0)
                         
-                        # Use ORB with optimized settings for auto-play
-                        orb_frame = ORB(n_keypoints=200)
-                        orb_frame.detect_and_extract(frame_gray)
-                        frame_features = len(orb_frame.keypoints) if orb_frame.keypoints is not None else 0
+                        # Use histogram comparison instead of feature matching
+                        from skimage import exposure
                         
-                        orb_marker = ORB(n_keypoints=200)
-                        orb_marker.detect_and_extract(marker_gray)
-                        marker_features = len(orb_marker.keypoints) if orb_marker.keypoints is not None else 0
+                        # Calculate histograms for both images
+                        frame_hist = exposure.histogram(frame_gray, nbins=64)[0]
+                        marker_hist = exposure.histogram(marker_gray, nbins=64)[0]
                         
-                        print(f"🔍 Frame features: {frame_features}, Marker features: {marker_features}")
+                        # Normalize histograms
+                        frame_hist = frame_hist / np.sum(frame_hist)
+                        marker_hist = marker_hist / np.sum(marker_hist)
                         
-                        # VERY AGGRESSIVE MATCHING - LIKE STORIES-AR.COM
-                        if frame_features >= 2 and marker_features >= 2:
-                            try:
-                                # Try multiple matching strategies
-                                matches_found = 0
+                        # Calculate histogram correlation
+                        hist_correlation = np.corrcoef(frame_hist, marker_hist)[0, 1]
+                        
+                        # Simple correlation check
+                        if np.isnan(hist_correlation):
+                            hist_correlation = 0.0
+                        
+                        matches_found = max(0, int(hist_correlation * 100))
+                        
+                        print(f"📊 Histogram correlation: {hist_correlation:.3f}")
+                        print(f"📊 Matches: {matches_found}")
                                 
-                                # Strategy 1: Strict matching
-                                try:
-                                    matches_strict = match_descriptors(
-                                        orb_marker.descriptors, 
-                                        orb_frame.descriptors,
-                                        cross_check=True, 
-                                        max_distance=0.7
-                                    )
-                                    if matches_strict is not None:
-                                        matches_found = len(matches_strict)
-                                        print(f"🎯 Strict matches: {matches_found}")
-                                except Exception as e:
-                                    print(f"⚠️ Strict matching failed: {e}")
-                                
-                                # Strategy 2: Relaxed matching (if strict fails)
-                                if matches_found < 2:
-                                    try:
-                                        matches_relaxed = match_descriptors(
-                                            orb_marker.descriptors, 
-                                            orb_frame.descriptors,
-                                            cross_check=True, 
-                                            max_distance=0.85
-                                        )
-                                        if matches_relaxed is not None:
-                                            matches_found = len(matches_relaxed)
-                                            print(f"🎯 Relaxed matches: {matches_found}")
-                                    except Exception as e:
-                                        print(f"⚠️ Relaxed matching failed: {e}")
-                                
-                                # Strategy 3: Very relaxed (like commercial AR)
-                                if matches_found < 1:
-                                    try:
-                                        matches_very_relaxed = match_descriptors(
-                                            orb_marker.descriptors, 
-                                            orb_frame.descriptors,
-                                            cross_check=False,
-                                            max_distance=0.95
-                                        )
-                                        if matches_very_relaxed is not None:
-                                            matches_found = len(matches_very_relaxed)
-                                            print(f"🎯 Very relaxed matches: {matches_found}")
-                                    except Exception as e:
-                                        print(f"⚠️ Very relaxed matching failed: {e}")
-                                
-                                print(f"🎯 Total matches found: {matches_found}")
-                                
-                                # AUTO-PLAY DECISION - VERY PERMISSIVE
-                                if matches_found >= 1:  # Just need 1 match for auto-play!
-                                    marker_detected = True
-                                    
-                                    # Calculate confidence (generous like stories-ar.com)
-                                    base_confidence = 0.35  # Start with 35%
-                                    match_bonus = matches_found * 0.12  # 12% per match
-                                    feature_bonus = min(0.15, frame_features / 50.0)  # Feature bonus
-                                    
-                                    confidence = min(1.0, base_confidence + match_bonus + feature_bonus)
-                                    features_found = frame_features
-                                    
-                                    # AUTO-PLAY TRIGGER (30% threshold)
-                                    if confidence >= 0.30:
-                                        video_overlay_ready = True
-                                        auto_play_ready = True
-                                    
-                                    print(f"✅ AUTO-PLAY TRIGGERED! Matches: {matches_found}, Confidence: {confidence:.2f}, Video: {auto_play_ready}")
-                                    
-                                else:
-                                    print(f"❌ No matches found even with very relaxed settings")
-                                    
-                            except Exception as match_error:
-                                print(f"❌ All matching strategies failed: {match_error}")
-                                
-                                # FALLBACK: Force auto-play based on basic similarity
-                                if frame_features > 5:
-                                    marker_detected = True
-                                    confidence = 0.32  # Just above 30% threshold
-                                    auto_play_ready = True
-                                    video_overlay_ready = True
-                                    features_found = frame_features
-                                    print(f"🔄 FALLBACK AUTO-PLAY TRIGGERED: {confidence:.2f}")
-                                
-                        else:
-                            print(f"⚠️ Very few features - Frame: {frame_features}, Marker: {marker_features}")
-                            
-                            # LAST RESORT - Basic detection (like stories-ar.com)
-                            if frame_features > 0 and marker_features > 0:
-                                similarity_score = min(frame_features, marker_features) / max(frame_features, marker_features)
-                                if similarity_score > 0.1:  # Very low threshold
-                                    confidence = 0.31  # Just above 30%
-                                    marker_detected = True
-                                    auto_play_ready = True
-                                    video_overlay_ready = True
-                                    features_found = frame_features
-                                    print(f"🎬 LAST RESORT AUTO-PLAY: similarity={similarity_score:.2f}, confidence={confidence:.2f}")
+                        # VALIDATION
+                        if matches_found >= 60:  # Same image
+                            marker_detected = True
+                            confidence = matches_found / 100.0
+                            features_found = 200
+                            video_overlay_ready = True
+                            auto_play_ready = True
+                            print(f"✅ SAME IMAGE: {matches_found}")
+                        else:  # Different image
+                            marker_detected = False
+                            confidence = 0.0
+                            auto_play_ready = False
+                            video_overlay_ready = False
+                            features_found = 0
+                            print(f"❌ DIFFERENT IMAGE: {matches_found}")
                             
                     except Exception as detection_error:
-                        print(f"❌ Feature detection error: {detection_error}")
+                        print(f"❌ Detection error: {detection_error}")
+                        matches_found = 0
+                        marker_detected = False
+                        confidence = 0.0
+                        auto_play_ready = False
+                        video_overlay_ready = False
+                        features_found = 0
                         
                 else:
                     print(f"❌ Missing data - Frame: {bool(frame_data)}, Image: {bool(experience.image)}")
